@@ -207,11 +207,6 @@ namespace OgreBites
         {
             if (mCurrentSample)  // sample quitting
             {
-#ifdef INCLUDE_RTSHADER_SYSTEM
-                // this also removes all rtshader material properties and e.g. the triplanar samples break
-                // however if we skip this, samples segfault on reloading
-                mShaderGenerator->removeAllShaderBasedTechniques();
-#endif
                 mCurrentSample->_shutdown();
                 mCurrentSample = 0;
                 mSamplePaused = false;     // don't pause next sample
@@ -1116,6 +1111,8 @@ namespace OgreBites
             Ogre::String sampleDir = cfg.getSetting("SampleFolder");        // Mac OS X just uses Resources/ directory
             Ogre::StringVector sampleList = cfg.getMultiSetting("SamplePlugin");
             Ogre::String startupSampleTitle = cfg.getSetting("StartupSample");
+
+            sampleDir = Ogre::FileSystemLayer::resolveBundlePath(sampleDir);
 
 #if OGRE_PLATFORM != OGRE_PLATFORM_APPLE && OGRE_PLATFORM != OGRE_PLATFORM_APPLE_IOS
             if (sampleDir.empty()) sampleDir = ".";   // user didn't specify plugins folder, try current one
