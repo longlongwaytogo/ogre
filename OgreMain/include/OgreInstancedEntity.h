@@ -30,9 +30,12 @@ THE SOFTWARE.
 
 #include "OgreMovableObject.h"
 #include "OgreNode.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre
 {
+    class NameGenerator;
+
     /** \addtogroup Core
     *  @{
     */
@@ -289,5 +292,6 @@ namespace Ogre
     };
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

@@ -34,6 +34,7 @@ THE SOFTWARE.
 #include "OgreRenderable.h"
 #include "OgreAxisAlignedBox.h"
 #include "OgreRenderOperation.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -72,7 +73,9 @@ namespace Ogre {
         /// Named constructor
         SimpleRenderable(const String& name);
 
-        virtual void setMaterial( const String& matName );
+        /// @deprecated use setMaterial(const MaterialPtr&)
+        OGRE_DEPRECATED virtual void setMaterial( const String& matName );
+        virtual void setMaterial(const MaterialPtr& mat);
         virtual const MaterialPtr& getMaterial(void) const;
 
         virtual void setRenderOperation( const RenderOperation& rend );
@@ -103,6 +106,7 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif
 

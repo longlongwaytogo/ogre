@@ -28,8 +28,7 @@ THE SOFTWARE.
 
 #include "OgreGLSLESLinkProgram.h"
 #include "OgreGLSLESProgram.h"
-#include "OgreGLSLESProgram.h"
-#include "OgreGLSLESLinkProgramManager.h"
+#include "OgreGLSLESProgramManager.h"
 #include "OgreGLES2HardwareUniformBuffer.h"
 #include "OgreLogManager.h"
 #include "OgreGpuProgramManager.h"
@@ -59,27 +58,12 @@ namespace Ogre {
         OGRE_CHECK_GL_ERROR(glDeleteProgram(mGLProgramHandle));
     }
 
-    void GLSLESLinkProgram::_useProgram(void)
-    {
-        if (mLinked)
-        {
-            OGRE_CHECK_GL_ERROR(glUseProgram( mGLProgramHandle ));
-        }
-    }
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
     void GLSLESLinkProgram::notifyOnContextLost()
     {
         OGRE_CHECK_GL_ERROR(glDeleteProgram(mGLProgramHandle));
         mGLProgramHandle = 0;
-        mLinked = false;
-        mTriedToLinkAndFailed = false;
-        mUniformRefsBuilt = false;
-        mUniformCache->clearCache();
-    }
-    
-    void GLSLESLinkProgram::notifyOnContextReset()
-    {
-        activate();
+        GLSLESProgramCommon::notifyOnContextLost();
     }
 #endif
     //-----------------------------------------------------------------------
@@ -134,7 +118,10 @@ namespace Ogre {
             buildGLUniformReferences();
         }
 
-        _useProgram();
+        if (mLinked)
+        {
+            OGRE_CHECK_GL_ERROR(glUseProgram( mGLProgramHandle ));
+        }
     }
 
     //-----------------------------------------------------------------------
@@ -163,6 +150,8 @@ namespace Ogre {
 
         mFragmentProgram->attachToProgramObject(mGLProgramHandle);
         
+        bindFixedAttributes( mGLProgramHandle );
+
         // The link
         OGRE_CHECK_GL_ERROR(glLinkProgram( mGLProgramHandle ));
         OGRE_CHECK_GL_ERROR(glGetProgramiv( mGLProgramHandle, GL_LINK_STATUS, &mLinked ));
@@ -210,8 +199,8 @@ namespace Ogre {
                 fragParams = &(mFragmentProgram->getConstantDefinitions().map);
             }
 
-            GLSLESLinkProgramManager::getSingleton().extractUniforms(
-                mGLProgramHandle, vertParams, fragParams, mGLUniformReferences, mGLUniformBufferReferences);
+            GLSLESProgramManager::extractUniforms(mGLProgramHandle, vertParams, fragParams,
+                                                  mGLUniformReferences, mGLUniformBufferReferences);
 
             mUniformRefsBuilt = true;
         }
@@ -236,8 +225,11 @@ namespace Ogre {
                 if (def->variability & mask)
                 {
                     GLsizei glArraySize = (GLsizei)def->arraySize;
+
                     bool shouldUpdate = true;
 
+                    // this is a monolitic program so we can use the cache of any attached shader
+                    GLUniformCache* uniformCache =  mVertexShader->getUniformCache();
                     switch (def->constType)
                     {
                         case GCT_INT1:
@@ -250,14 +242,14 @@ namespace Ogre {
                         case GCT_SAMPLER2DSHADOW:
                         case GCT_SAMPLER3D:
                         case GCT_SAMPLERCUBE:
-                            shouldUpdate = mUniformCache->updateUniform(currentUniform->mLocation,
-                                                                                  params->getIntPointer(def->physicalIndex),
-                                                                                  static_cast<GLsizei>(def->elementSize * def->arraySize * sizeof(int)));
+                            shouldUpdate = uniformCache->updateUniform(currentUniform->mLocation,
+                                                                       params->getIntPointer(def->physicalIndex),
+                                                                       static_cast<GLsizei>(def->elementSize * glArraySize * sizeof(int)));
                             break;
                         default:
-                            shouldUpdate = mUniformCache->updateUniform(currentUniform->mLocation,
-                                                                                  params->getFloatPointer(def->physicalIndex),
-                                                                                  static_cast<GLsizei>(def->elementSize * def->arraySize * sizeof(float)));
+                            shouldUpdate = uniformCache->updateUniform(currentUniform->mLocation,
+                                                                       params->getFloatPointer(def->physicalIndex),
+                                                                       static_cast<GLsizei>(def->elementSize * glArraySize * sizeof(float)));
                             break;
                     }
 
@@ -426,11 +418,7 @@ namespace Ogre {
                 // Get the index in the parameter real list
                 if (index == currentUniform->mConstantDef->physicalIndex)
                 {
-                     mUniformCache->updateUniform(currentUniform->mLocation,
-                                                  params->getFloatPointer(index),
-                                                  static_cast<GLsizei>(currentUniform->mConstantDef->elementSize *
-                                                  currentUniform->mConstantDef->arraySize *
-                                                  sizeof(float)));
+                    OGRE_CHECK_GL_ERROR(glUniform1fv(currentUniform->mLocation, 1, params->getFloatPointer(index)));
                     // There will only be one multipass entry
                     return;
                 }

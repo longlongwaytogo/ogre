@@ -33,6 +33,7 @@
 #include "OgreVectorSet.h"
 #include "OgreVectorSetImpl.h"
 #include "OgreVector3.h"
+#include "OgreHeaderPrefix.h"
 
 #ifndef MESHLOD_QUALITY
 /// MESHLOD_QUALITY=1 is fastest processing time.
@@ -164,14 +165,25 @@ struct _OgreLodExport LodData {
         return id;
     }
 
+#if OGRE_COMPILER == OGRE_COMPILER_MSVC
+    // We know it's safe to pass this pointer to VertexHash because it's not used there yet.
+#   pragma warning ( push )
+#   pragma warning ( disable: 4355 )
+#endif
     LodData() :
         mUniqueVertexSet((UniqueVertexSet::size_type) 0,
         (const UniqueVertexSet::hasher&) VertexHash(this)),
         mMeshBoundingSphereRadius(0.0f),
         mUseVertexNormals(true)
     {}
+#if OGRE_COMPILER == OGRE_COMPILER_MSVC
+#   pragma warning ( pop )
+#endif
 };
 /** @} */
 /** @} */
 }
+
+#include "OgreHeaderSuffix.h"
+
 #endif

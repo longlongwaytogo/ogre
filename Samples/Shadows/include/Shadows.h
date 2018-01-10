@@ -139,8 +139,6 @@ protected:
     // transient pointer to LiSPSM setup if present
     LiSPSMShadowCameraSetup* mLiSPSMSetup;
 
-    bool mIsOpenGL;
-
 public:
 
     bool frameEnded(const FrameEvent& evt)
@@ -209,9 +207,6 @@ protected:
     // Just override the mandatory create scene method
     void setupContent(void)
     {
-        // Need to detect D3D or GL for best depth shadowmapping
-        mIsOpenGL = Root::getSingleton().getRenderSystem()->getName().find("GL") != String::npos;
-
         // do this first so we generate edge lists
         if (mRoot->getRenderSystem()->getCapabilities()->hasCapability(RSC_HWSTENCIL))
         {
@@ -229,12 +224,11 @@ protected:
         // Fixed light, dim
         mSunLight = mSceneMgr->createLight("SunLight");
         mSunLight->setType(Light::LT_SPOTLIGHT);
-        mSunLight->setPosition(1500,1750,1300);
+
+        Vector3 pos(1500,1750,1300);
+        mSceneMgr->getRootSceneNode()->createChildSceneNode(pos)->attachObject(mSunLight);
         mSunLight->setSpotlightRange(Degree(30), Degree(50));
-        Vector3 dir;
-        dir = -mSunLight->getPosition();
-        dir.normalise();
-        mSunLight->setDirection(dir);
+        mSunLight->setDirection(-pos.normalisedCopy());
         mSunLight->setDiffuseColour(0.35, 0.35, 0.38);
         mSunLight->setSpecularColour(0.9, 0.9, 1);
 
@@ -359,25 +353,11 @@ protected:
         pPlaneEnt->setMaterialName(BASIC_ROCKWALL_MATERIAL);
         pPlaneEnt->setCastShadows(false);
         mSceneMgr->getRootSceneNode()->createChildSceneNode()->attachObject(pPlaneEnt);
-
-        if (mRoot->getRenderSystem()->getCapabilities()->hasCapability(RSC_HWRENDER_TO_TEXTURE))
-        {
-            // In D3D, use a 1024x1024 shadow texture
-            mSceneMgr->setShadowTextureSettings(1024, 2);
-        }
-        else
-        {
-            // Use 512x512 texture in GL since we can't go higher than the window res
-            mSceneMgr->setShadowTextureSettings(512, 2);
-        }
-
+        mSceneMgr->setShadowTextureSettings(1024, 2);
         mSceneMgr->setShadowColour(ColourValue(0.5, 0.5, 0.5));
         //mSceneMgr->setShowDebugShadows(true);
 
         setupGUI();
-#if OGRE_PLATFORM != OGRE_PLATFORM_APPLE_IOS
-        setDragLook(true);
-#endif
     }
 
     virtual void setupView()
@@ -387,8 +367,8 @@ protected:
         // incase infinite far distance is not supported
         mCamera->setFarClipDistance(100000);
 
-        mCamera->setPosition(250, 20, 400);
-        mCamera->lookAt(0, 10, 0);
+        mCameraMan->setStyle(CS_ORBIT);
+        mCameraMan->setYawPitchDist(Degree(0), Degree(45), 400);
     }
     
     virtual void cleanupContent()
@@ -530,6 +510,10 @@ protected:
 
         updateGUI(mCurrentShadowTechnique);
         mTrayMgr->showCursor();
+
+        // Uncomment this to display the shadow textures
+        // addTextureDebugOverlay(TL_RIGHT, mSceneMgr->getShadowTexture(0), 0);
+        // addTextureDebugOverlay(TL_RIGHT, mSceneMgr->getShadowTexture(1), 1);
     }
 
     void updateGUI(ShadowTechnique newTech)
@@ -681,19 +665,6 @@ protected:
         }
     }
 
-    void rebindDebugShadowOverlays()
-    {
-        /*MaterialPtr debugMat = 
-            MaterialManager::getSingleton().getByName("Ogre/DebugShadowMap0");
-        TexturePtr shadowTex = mSceneMgr->getShadowTexture(0);
-        debugMat->getTechnique(0)->getPass(0)->getTextureUnitState(0)->setTextureName(shadowTex->getName());
-
-        debugMat = 
-            MaterialManager::getSingleton().getByName("Ogre/DebugShadowMap1");
-        shadowTex = mSceneMgr->getShadowTexture(1);
-        debugMat->getTechnique(0)->getPass(0)->getTextureUnitState(0)->setTextureName(shadowTex->getName());*/
-    }
-
     void resetMaterials()
     {
         // Sort out base materials
@@ -723,28 +694,20 @@ protected:
             {
             case MAT_STANDARD:
                 mSceneMgr->setShadowTexturePixelFormat(PF_X8R8G8B8);
-                mSceneMgr->setShadowTextureCasterMaterial(BLANKSTRING);
-                mSceneMgr->setShadowTextureReceiverMaterial(BLANKSTRING);
+                mSceneMgr->setShadowTextureCasterMaterial(MaterialPtr());
+                mSceneMgr->setShadowTextureReceiverMaterial(MaterialPtr());
                 mSceneMgr->setShadowTextureSelfShadow(false);   
                 
                 resetMaterials();
 
                 break;
             case MAT_DEPTH_FLOAT:
-                //if (mIsOpenGL)
-                //{
-                //  // GL performs much better if you pick half-float format
-                //  mSceneMgr->setShadowTexturePixelFormat(PF_FLOAT16_R);
-                //}
-                //else
-                {
-                    // D3D is the opposite - if you ask for PF_FLOAT16_R you
-                    // get an integer format instead! You can ask for PF_FLOAT16_GR
-                    // but the precision doesn't work well
-                    mSceneMgr->setShadowTexturePixelFormat(PF_FLOAT32_R);
-                }
-                mSceneMgr->setShadowTextureCasterMaterial(CUSTOM_CASTER_MATERIAL);
-                mSceneMgr->setShadowTextureReceiverMaterial(CUSTOM_RECEIVER_MATERIAL);
+                mSceneMgr->setShadowTexturePixelFormat(PF_FLOAT32_R);
+
+                themat = MaterialManager::getSingleton().getByName(CUSTOM_CASTER_MATERIAL);
+                mSceneMgr->setShadowTextureCasterMaterial(themat);
+                themat = MaterialManager::getSingleton().getByName(CUSTOM_RECEIVER_MATERIAL);
+                mSceneMgr->setShadowTextureReceiverMaterial(themat);
                 mSceneMgr->setShadowTextureSelfShadow(true);    
                 // Sort out base materials
                 pPlaneEnt->setMaterialName(CUSTOM_ROCKWALL_MATERIAL);
@@ -768,20 +731,12 @@ protected:
                 setDefaultDepthShadowParams();
                 break;
             case MAT_DEPTH_FLOAT_PCF:
-                //if (mIsOpenGL)
-                //{
-                //  // GL performs much better if you pick half-float format
-                //  mSceneMgr->setShadowTexturePixelFormat(PF_FLOAT16_R);
-                //}
-                //else
-                {
-                    // D3D is the opposite - if you ask for PF_FLOAT16_R you
-                    // get an integer format instead! You can ask for PF_FLOAT16_GR
-                    // but the precision doesn't work well
-                    mSceneMgr->setShadowTexturePixelFormat(PF_FLOAT32_R);
-                }
-                mSceneMgr->setShadowTextureCasterMaterial(CUSTOM_CASTER_MATERIAL);
-                mSceneMgr->setShadowTextureReceiverMaterial(CUSTOM_RECEIVER_MATERIAL + "/PCF");
+                mSceneMgr->setShadowTexturePixelFormat(PF_FLOAT32_R);
+
+                themat = MaterialManager::getSingleton().getByName(CUSTOM_CASTER_MATERIAL);
+                mSceneMgr->setShadowTextureCasterMaterial(themat);
+                themat = MaterialManager::getSingleton().getByName(CUSTOM_RECEIVER_MATERIAL + "/PCF");
+                mSceneMgr->setShadowTextureReceiverMaterial(themat);
                 mSceneMgr->setShadowTextureSelfShadow(true);    
                 // Sort out base materials
                 pPlaneEnt->setMaterialName(CUSTOM_ROCKWALL_MATERIAL + "/PCF");
@@ -825,7 +780,6 @@ protected:
                 mTrayMgr->removeWidgetFromTray(mClampSlider);       
             }
             //updateTipForCombo(cbo);
-            //rebindDebugShadowOverlays();
         }
     }
 };

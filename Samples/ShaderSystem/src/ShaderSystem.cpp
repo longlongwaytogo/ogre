@@ -38,6 +38,9 @@ const String MESH_ARRAY[MESH_ARRAY_SIZE] =
 static SamplePlugin* sp;
 static Sample* s;
 
+extern "C" void _OgreSampleExport dllStartPlugin(void);
+extern "C" void _OgreSampleExport dllStopPlugin(void);
+
 //-----------------------------------------------------------------------
 extern "C" _OgreSampleExport void dllStartPlugin()
 {
@@ -365,7 +368,9 @@ void Sample_ShaderSystem::setupContent()
     childNode->attachObject(mLayeredBlendingEntity);
 
     // Grab the render state of the material.
-    RTShader::RenderState* renderState = mShaderGenerator->getRenderState(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, "RTSS/LayeredBlending", 0);
+    RTShader::RenderState* renderState = mShaderGenerator->getRenderState(
+        RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, "RTSS/LayeredBlending",
+        ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME, 0);
 
     if (renderState != NULL)
     {           
@@ -430,8 +435,8 @@ void Sample_ShaderSystem::setupContent()
     setupUI();
 
 
-    mCamera->setPosition(0.0, 300.0, 450.0);
-    mCamera->lookAt(0.0, 150.0, 0.0);
+    mCameraNode->setPosition(0.0, 300.0, 450.0);
+    mCameraNode->lookAt(Vector3(0.0, 150.0, 0.0), Node::TS_PARENT);
 
     // Make this viewport work with shader generator scheme.
     mViewport->setMaterialScheme(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME);
@@ -528,8 +533,7 @@ void Sample_ShaderSystem::setupUI()
     // Allow reflection map only on PS3 and above since with all lights on + specular + bump we 
     // exceed the instruction count limits of PS2.
     if (GpuProgramManager::getSingleton().isSyntaxSupported("ps_3_0") ||
-        GpuProgramManager::getSingleton().isSyntaxSupported("glsles") ||
-        GpuProgramManager::getSingleton().isSyntaxSupported("fp30"))
+        !GpuProgramManager::getSingleton().isSyntaxSupported("ps_2_0"))
     {
         mTrayMgr->createCheckBox(TL_BOTTOM, REFLECTIONMAP_BOX, "Reflection Map", 240)->setChecked(mReflectionMapEnable);
         mReflectionPowerSlider = mTrayMgr->createThickSlider(TL_BOTTOM, REFLECTIONMAP_POWER_SLIDER, "Reflection Power", 240, 80, 0, 1, 100);
@@ -729,7 +733,7 @@ void Sample_ShaderSystem::generateShaders(Entity* entity)
             RTShader::RenderState* renderState =
                 mShaderGenerator->getRenderState(
                     RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME,
-                    curMaterial->getName(), 0);
+                    curMaterial->getName(), curMaterial->getGroup(), 0);
 
             // Remove all sub render states.
             renderState->reset();
@@ -818,7 +822,7 @@ void Sample_ShaderSystem::generateShaders(Entity* entity)
             // Invalidate this material in order to re-generate its shaders.
             mShaderGenerator->invalidateMaterial(
                 RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME,
-                curMaterial->getName());
+                curMaterial->getName(), curMaterial->getGroup());
         }
     }
 }
@@ -1125,16 +1129,14 @@ void Sample_ShaderSystem::applyShadowType(int menuIndex)
         mDirLightCheckBox->hide();
         mPointLightCheckBox->hide();
         mSpotLightCheckBox->hide();
-        
-        
-        // Set up caster material - this is just a standard depth/shadow map caster
-        mSceneMgr->setShadowTextureCasterMaterial("PSSM/shadow_caster");
-        
-        
+
         // Disable fog on the caster pass.
         MaterialPtr passCaterMaterial = MaterialManager::getSingleton().getByName("PSSM/shadow_caster");
         Pass* pssmCasterPass = passCaterMaterial->getTechnique(0)->getPass(0);
         pssmCasterPass->setFog(true);
+
+        // Set up caster material - this is just a standard depth/shadow map caster
+        mSceneMgr->setShadowTextureCasterMaterial(passCaterMaterial);
 
         // shadow camera setup
         PSSMShadowCameraSetup* pssmSetup = new PSSMShadowCameraSetup();
@@ -1181,7 +1183,7 @@ void Sample_ShaderSystem::exportRTShaderSystemMaterial(const String& fileName, c
     if (success)
     {
         // Force shader generation of the given material.
-        RTShader::ShaderGenerator::getSingleton().validateMaterial(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, materialName);
+        RTShader::ShaderGenerator::getSingleton().validateMaterial(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, materialName, materialPtr->getGroup());
 
         // Grab the RTSS material serializer listener.
         MaterialSerializer::Listener* matRTSSListener = RTShader::ShaderGenerator::getSingleton().getMaterialSerializerListener();
@@ -1266,8 +1268,10 @@ void Sample_ShaderSystem::unloadResources()
 {
     destroyPrivateResourceGroup();
 
-    mShaderGenerator->removeAllShaderBasedTechniques("Panels");
-    mShaderGenerator->removeAllShaderBasedTechniques("Panels_RTSS_Export");
+    mShaderGenerator->removeAllShaderBasedTechniques(
+        "Panels", ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME);
+    mShaderGenerator->removeAllShaderBasedTechniques(
+        "Panels_RTSS_Export", ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME);
 
     if (mReflectionMapFactory != NULL)
     {   
@@ -1384,8 +1388,10 @@ void Sample_ShaderSystem::changeTextureLayerBlendMode()
     }
 
     
-    mLayerBlendSubRS->setBlendMode(1, nextBlendMode);           
-    mShaderGenerator->invalidateMaterial(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, "RTSS/LayeredBlending");
+    mLayerBlendSubRS->setBlendMode(1, nextBlendMode);
+    mShaderGenerator->invalidateMaterial(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME,
+                                         "RTSS/LayeredBlending",
+                                         ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
 
     // Update the caption.
     updateLayerBlendingCaption(nextBlendMode);
@@ -1663,16 +1669,15 @@ void Sample_ShaderSystem::createInstancedViewports()
             *buf = 0; buf++;
             *buf = 1; buf++;
         }
-        vbuf->unlock();
+    vbuf->unlock();
 
-        mRoot->getRenderSystem()->setGlobalInstanceVertexBuffer(vbuf);
-        mRoot->getRenderSystem()->setGlobalInstanceVertexBufferVertexDeclaration(vertexDeclaration);
-        mRoot->getRenderSystem()->setGlobalNumberOfInstances(monitorCount.x * monitorCount.y);
+    mRoot->getRenderSystem()->setGlobalInstanceVertexBuffer(vbuf);
+    mRoot->getRenderSystem()->setGlobalInstanceVertexBufferVertexDeclaration(vertexDeclaration);
+    mRoot->getRenderSystem()->setGlobalNumberOfInstances(monitorCount.x * monitorCount.y);
 
-        // Invalidate the scheme in order to re-generate all shaders based technique related to this scheme.
-        mShaderGenerator->invalidateScheme(Ogre::RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME);
-        mShaderGenerator->validateScheme(Ogre::RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME);
-
+    // Invalidate the scheme in order to re-generate all shaders based technique related to this scheme.
+    mShaderGenerator->invalidateScheme(Ogre::RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME);
+    mShaderGenerator->validateScheme(Ogre::RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME);
 }
 
 void Sample_ShaderSystem::createMaterialForTexture( const String & texName, bool isTextureAtlasTexture )

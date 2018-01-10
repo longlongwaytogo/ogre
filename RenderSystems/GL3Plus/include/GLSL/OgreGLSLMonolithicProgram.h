@@ -51,8 +51,6 @@ namespace Ogre {
     protected:
         /// Compiles and links the vertex and fragment programs
         void compileAndLink(void);
-        /// Put a program in use
-        void _useProgram(void);
 
         void buildGLUniformReferences(void);
 
@@ -89,6 +87,9 @@ namespace Ogre {
             pass rendering occurs.
         */
         void updatePassIterationUniforms(GpuProgramParametersSharedPtr params);
+
+        void updateAtomicCounters(GpuProgramParametersSharedPtr params, uint16 mask,
+                                  GpuProgramType fromProgType) {}
     };
 
 }

@@ -336,7 +336,7 @@ D3DBOX toD3DBOXExtent(const PixelBox &lockBox)
     return pbox;
 }
 //-----------------------------------------------------------------------------  
-PixelBox D3D9HardwarePixelBuffer::lockImpl(const Image::Box &lockBox,  LockOptions options)
+PixelBox D3D9HardwarePixelBuffer::lockImpl(const Box &lockBox,  LockOptions options)
 {   
     D3D9_DEVICE_ACCESS_CRITICAL_SECTION
 
@@ -378,7 +378,7 @@ PixelBox D3D9HardwarePixelBuffer::lockImpl(const Image::Box &lockBox,  LockOptio
 
 //-----------------------------------------------------------------------------  
 Ogre::PixelBox D3D9HardwarePixelBuffer::lockBuffer(BufferResources* bufferResources, 
-                                                   const Image::Box &lockBox, 
+                                                   const Box &lockBox, 
                                                    DWORD flags)
 {
     // Set extents and format
@@ -486,8 +486,8 @@ void D3D9HardwarePixelBuffer::unlockBuffer(BufferResources* bufferResources)
 
 //-----------------------------------------------------------------------------  
 void D3D9HardwarePixelBuffer::blit(const HardwarePixelBufferSharedPtr &rsrc, 
-                                   const Image::Box &srcBox, 
-                                   const Image::Box &dstBox)
+                                   const Box &srcBox, 
+                                   const Box &dstBox)
 {
     D3D9_DEVICE_ACCESS_CRITICAL_SECTION
 
@@ -514,8 +514,8 @@ void D3D9HardwarePixelBuffer::blit(const HardwarePixelBufferSharedPtr &rsrc,
 //-----------------------------------------------------------------------------  
 void D3D9HardwarePixelBuffer::blit(IDirect3DDevice9* d3d9Device, 
                                    const HardwarePixelBufferSharedPtr &rsrc, 
-                                   const Image::Box &srcBox, 
-                                   const Image::Box &dstBox,
+                                   const Box &srcBox, 
+                                   const Box &dstBox,
                                    BufferResources* srcBufferResources, 
                                    BufferResources* dstBufferResources)
 {
@@ -615,7 +615,7 @@ void D3D9HardwarePixelBuffer::blit(IDirect3DDevice9* d3d9Device,
 }
 
 //-----------------------------------------------------------------------------  
-void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::Box &dstBox)
+void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Box &dstBox)
 {   
     D3D9_DEVICE_ACCESS_CRITICAL_SECTION
 
@@ -631,7 +631,7 @@ void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::B
 }
 
 //-----------------------------------------------------------------------------  
-void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::Box &dstBox, BufferResources* dstBufferResources)
+void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Box &dstBox, BufferResources* dstBufferResources)
 {
     // for scoped deletion of conversion buffer
     MemoryDataStreamPtr buf;
@@ -640,7 +640,7 @@ void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::B
     // convert to pixelbuffer's native format if necessary
     if (D3D9Mappings::_getPF(src.format) == D3DFMT_UNKNOWN)
     {
-        buf.bind(OGRE_NEW MemoryDataStream(
+        buf.reset(OGRE_NEW MemoryDataStream(
             PixelUtil::getMemorySize(src.getWidth(), src.getHeight(), src.getDepth(),
             mFormat)));
         converted = PixelBox(src.getWidth(), src.getHeight(), src.getDepth(), mFormat, buf->getPtr());
@@ -679,12 +679,6 @@ void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::B
         RECT destRect, srcRect;
         srcRect = toD3DRECT(converted);
         destRect = toD3DRECT(dstBox);
-
-        if(converted.getWidth() != dstBox.getWidth() || converted.getHeight() != dstBox.getHeight() )
-        {
-            OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Source and dest size are different",
-                "D3D9HardwarePixelBuffer::blitFromMemory");
-        }
 
         if(D3DXLoadSurfaceFromMemory(dstBufferResources->surface, NULL, &destRect, 
             converted.data, D3D9Mappings::_getPF(converted.format),
@@ -737,7 +731,7 @@ void D3D9HardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::B
 }
 
 //-----------------------------------------------------------------------------  
-void D3D9HardwarePixelBuffer::blitToMemory(const Image::Box &srcBox, const PixelBox &dst)
+void D3D9HardwarePixelBuffer::blitToMemory(const Box &srcBox, const PixelBox &dst)
 {
     D3D9_DEVICE_ACCESS_CRITICAL_SECTION
 
@@ -748,7 +742,7 @@ void D3D9HardwarePixelBuffer::blitToMemory(const Image::Box &srcBox, const Pixel
 }
 
 //-----------------------------------------------------------------------------  
-void D3D9HardwarePixelBuffer::blitToMemory(const Image::Box &srcBox, const PixelBox &dst, 
+void D3D9HardwarePixelBuffer::blitToMemory(const Box &srcBox, const PixelBox &dst, 
                                            BufferResources* srcBufferResources,
                                            IDirect3DDevice9* d3d9Device)
 {

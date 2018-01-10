@@ -29,7 +29,7 @@ THE SOFTWARE.
 #define _OgreShaderExAlphaTest_
 
 #include "OgreShaderPrerequisites.h"
-#ifdef RTSHADER_SYSTEM_BUILD_EXT_SHADERS
+#ifdef RTSHADER_SYSTEM_BUILD_CORE_SHADERS
 #include "OgreShaderFFPTexturing.h"
 #include "OgreShaderSubRenderState.h"
 
@@ -40,7 +40,7 @@ namespace RTShader {
 A factory that enables creation of LayeredBlending instances.
 @remarks Sub class of SubRenderStateFactory
 */
-	class FFPAlphaTest : public SubRenderState
+	class _OgreRTSSExport FFPAlphaTest : public SubRenderState
 	{
 	
 	private:
@@ -76,8 +76,6 @@ public:
     */
     virtual const String& getType() const;
 
-	FFPAlphaTest();
-
     /** 
     @see SubRenderState::getExecutionOrder.
     */
@@ -100,7 +98,7 @@ public:
 
 	};
 
-class FFPAlphaTestFactory : public SubRenderStateFactory
+class _OgreRTSSExport FFPAlphaTestFactory : public SubRenderStateFactory
 {
 
 public:
@@ -110,17 +108,6 @@ static String Type;
 	@see SubRenderStateFactory::getType.
 	*/
 	virtual const String& getType() const;
-
-	/** 
-	@see SubRenderStateFactory::createInstance.
-	*/
-	virtual SubRenderState* createInstance(ScriptCompiler* compiler, PropertyAbstractNode* prop, TextureUnitState* texState, SGScriptTranslator* translator);
-
-	/** 
-	@see SubRenderStateFactory::writeInstance.
-	*/
-	virtual void writeInstance(MaterialSerializer* ser, SubRenderState* subRenderState, const TextureUnitState* srcTextureUnit, const TextureUnitState* dstTextureUnit);
-
     
 protected:
 	
@@ -128,19 +115,10 @@ protected:
 	@see SubRenderStateFactory::createInstanceImpl.
 	*/
 	virtual SubRenderState* createInstanceImpl();
-
-
-
-	/** 
-	Returns the LayeredBlending sub-rener state previously created for this material/pass.
-	if no such sub-render state exists creates a new one
-	@param translator compiler
-	*/
-	FFPAlphaTest* createOrRetrieveSubRenderState(SGScriptTranslator* translator);
 };
 
 } // namespace RTShader
 } // namespace Ogre
 
-#endif // RTSHADER_SYSTEM_BUILD_EXT_SHADERS
-#endif // _OgreShaderExLayeredBlending_
+#endif
+#endif

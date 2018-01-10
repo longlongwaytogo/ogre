@@ -32,22 +32,38 @@
 #include "OgreGLSLShader.h"
 #include "OgreGpuProgramManager.h"
 #include "OgreGL3PlusHardwareBufferManager.h"
+#include "OgreGL3PlusRenderSystem.h"
 #include "OgreRoot.h"
-#include "OgreGL3PlusSupport.h"
 
-#include <iostream>
+#include "OgreGLSLMonolithicProgram.h"
+#include "OgreGLSLSeparableProgram.h"
 
 namespace Ogre {
 
+    template<> GLSLProgramManager* Singleton<GLSLProgramManager>::msSingleton = 0;
+
+
+    GLSLProgramManager* GLSLProgramManager::getSingletonPtr(void)
+    {
+        return msSingleton;
+    }
+
+
+    GLSLProgramManager& GLSLProgramManager::getSingleton(void)
+    {
+        assert(msSingleton);
+        return (*msSingleton);
+    }
     
-    GLSLProgramManager::GLSLProgramManager(const GL3PlusSupport& support) :
+    GLSLProgramManager::GLSLProgramManager(GL3PlusRenderSystem* renderSystem) :
         mActiveVertexShader(NULL),
         mActiveHullShader(NULL),
         mActiveDomainShader(NULL),
         mActiveGeometryShader(NULL),
         mActiveFragmentShader(NULL),
         mActiveComputeShader(NULL),
-        mGLSupport(support)
+        mActiveProgram(NULL),
+        mRenderSystem(renderSystem)
     {
         // Fill in the relationship between type names and enums
         mTypeEnumMap.insert(StringToEnumMap::value_type("float", GL_FLOAT));
@@ -182,7 +198,150 @@ namespace Ogre {
         // GL 4.2
         mTypeEnumMap.insert(StringToEnumMap::value_type("atomic_uint", GL_UNSIGNED_INT_ATOMIC_COUNTER));
     }
-    
+
+    GLSLProgramManager::~GLSLProgramManager(void) {}
+
+    GL3PlusStateCacheManager* GLSLProgramManager::getStateCacheManager()
+    {
+        return mRenderSystem->_getStateCacheManager();
+    }
+
+    GLSLProgram* GLSLProgramManager::getActiveProgram(void)
+    {
+        // If there is an active link program then return it.
+        if (mActiveProgram)
+            return mActiveProgram;
+
+        // No active link program so find one or make a new one.
+        // Is there an active key?
+        uint32 activeKey = 0;
+        if (mActiveVertexShader)
+        {
+            activeKey = HashCombine(activeKey, mActiveVertexShader->getShaderID());
+        }
+        if (mActiveDomainShader)
+        {
+            activeKey = HashCombine(activeKey, mActiveDomainShader->getShaderID());
+        }
+        if (mActiveHullShader)
+        {
+            activeKey = HashCombine(activeKey, mActiveHullShader->getShaderID());
+        }
+        if (mActiveGeometryShader)
+        {
+            activeKey = HashCombine(activeKey, mActiveGeometryShader->getShaderID());
+        }
+        if (mActiveFragmentShader)
+        {
+            activeKey = HashCombine(activeKey, mActiveFragmentShader->getShaderID());
+        }
+        if (mActiveComputeShader)
+        {
+            activeKey = HashCombine(activeKey, mActiveComputeShader->getShaderID());
+        }
+
+        // Only return a link program object if a program exists.
+        if (activeKey > 0)
+        {
+            // Find the key in the hash map.
+            ProgramIterator programFound = mPrograms.find(activeKey);
+            // Program object not found for key so need to create it.
+            if (programFound == mPrograms.end())
+            {
+                if (mRenderSystem->getCapabilities()->hasCapability(RSC_SEPARATE_SHADER_OBJECTS))
+                {
+                    mActiveProgram = new GLSLSeparableProgram(
+                        mActiveVertexShader, mActiveHullShader, mActiveDomainShader,
+                        mActiveGeometryShader, mActiveFragmentShader, mActiveComputeShader);
+                }
+                else
+                {
+                    mActiveProgram = new GLSLMonolithicProgram(
+                        mActiveVertexShader, mActiveHullShader, mActiveDomainShader,
+                        mActiveGeometryShader, mActiveFragmentShader, mActiveComputeShader);
+                }
+
+                mPrograms[activeKey] = mActiveProgram;
+            }
+            else
+            {
+                // Found a link program in map container so make it active.
+                mActiveProgram = static_cast<GLSLProgram*>(programFound->second);
+            }
+        }
+
+        // Make the program object active.
+        if (mActiveProgram)
+            mActiveProgram->activate();
+
+        return mActiveProgram;
+    }
+
+    void GLSLProgramManager::setActiveFragmentShader(GLSLShader* fragmentShader)
+    {
+        if (fragmentShader != mActiveFragmentShader)
+        {
+            mActiveFragmentShader = fragmentShader;
+            // ActiveMonolithicProgram is no longer valid
+            mActiveProgram = NULL;
+        }
+    }
+
+
+    void GLSLProgramManager::setActiveVertexShader(GLSLShader* vertexShader)
+    {
+        if (vertexShader != mActiveVertexShader)
+        {
+            mActiveVertexShader = vertexShader;
+            // ActiveMonolithicProgram is no longer valid
+            mActiveProgram = NULL;
+        }
+    }
+
+
+    void GLSLProgramManager::setActiveGeometryShader(GLSLShader* geometryShader)
+    {
+        if (geometryShader != mActiveGeometryShader)
+        {
+            mActiveGeometryShader = geometryShader;
+            // ActiveMonolithicProgram is no longer valid
+            mActiveProgram = NULL;
+        }
+    }
+
+
+    void GLSLProgramManager::setActiveHullShader(GLSLShader* hullShader)
+    {
+        if (hullShader != mActiveHullShader)
+        {
+            mActiveHullShader = hullShader;
+            // ActiveMonolithicProgram is no longer valid
+            mActiveProgram = NULL;
+        }
+    }
+
+
+    void GLSLProgramManager::setActiveDomainShader(GLSLShader* domainShader)
+    {
+        if (domainShader != mActiveDomainShader)
+        {
+            mActiveDomainShader = domainShader;
+            // ActiveMonolithicProgram is no longer valid
+            mActiveProgram = NULL;
+        }
+    }
+
+
+    void GLSLProgramManager::setActiveComputeShader(GLSLShader* computeShader)
+    {
+        if (computeShader != mActiveComputeShader)
+        {
+            mActiveComputeShader = computeShader;
+            // ActiveMonolithicProgram is no longer valid
+            mActiveProgram = NULL;
+        }
+    }
+
     void GLSLProgramManager::convertGLUniformtoOgreType(GLenum gltype,
                                                         GpuConstantDefinition& defToUpdate)
     {
@@ -362,78 +521,20 @@ namespace Ogre {
     
     bool GLSLProgramManager::findUniformDataSource(
         const String& paramName,
-        const GpuConstantDefinitionMap* vertexConstantDefs,
-        const GpuConstantDefinitionMap* hullConstantDefs,
-        const GpuConstantDefinitionMap* domainConstantDefs,
-        const GpuConstantDefinitionMap* geometryConstantDefs,
-        const GpuConstantDefinitionMap* fragmentConstantDefs,
-        const GpuConstantDefinitionMap* computeConstantDefs,
+        const GpuConstantDefinitionMap* (&constantDefs)[6],
         GLUniformReference& refToUpdate)
     {
-        if (vertexConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                vertexConstantDefs->find(paramName);
-            if (parami != vertexConstantDefs->end())
+        for(int i = 0; i < 6; i++) {
+            if (constantDefs[i])
             {
-                refToUpdate.mSourceProgType = GPT_VERTEX_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (geometryConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                geometryConstantDefs->find(paramName);
-            if (parami != geometryConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_GEOMETRY_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (fragmentConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                fragmentConstantDefs->find(paramName);
-            if (parami != fragmentConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_FRAGMENT_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (hullConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                hullConstantDefs->find(paramName);
-            if (parami != hullConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_HULL_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (domainConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                domainConstantDefs->find(paramName);
-            if (parami != domainConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_DOMAIN_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (computeConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                computeConstantDefs->find(paramName);
-            if (parami != computeConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_COMPUTE_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
+                GpuConstantDefinitionMap::const_iterator parami =
+                        constantDefs[i]->find(paramName);
+                if (parami != constantDefs[i]->end())
+                {
+                    refToUpdate.mSourceProgType = static_cast<GpuProgramType>(i);
+                    refToUpdate.mConstantDef = &(parami->second);
+                    return true;
+                }
             }
         }
         return false;
@@ -444,78 +545,20 @@ namespace Ogre {
     // and AtomicCounterReference
     bool GLSLProgramManager::findAtomicCounterDataSource(
         const String& paramName,
-        const GpuConstantDefinitionMap* vertexConstantDefs,
-        const GpuConstantDefinitionMap* hullConstantDefs,
-        const GpuConstantDefinitionMap* domainConstantDefs,
-        const GpuConstantDefinitionMap* geometryConstantDefs,
-        const GpuConstantDefinitionMap* fragmentConstantDefs,
-        const GpuConstantDefinitionMap* computeConstantDefs,
+        const GpuConstantDefinitionMap* (&constantDefs)[6],
         GLAtomicCounterReference& refToUpdate)
     {
-        if (vertexConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                vertexConstantDefs->find(paramName);
-            if (parami != vertexConstantDefs->end())
+        for(int i = 0; i < 6; i++) {
+            if (constantDefs[i])
             {
-                refToUpdate.mSourceProgType = GPT_VERTEX_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (geometryConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                geometryConstantDefs->find(paramName);
-            if (parami != geometryConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_GEOMETRY_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (fragmentConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                fragmentConstantDefs->find(paramName);
-            if (parami != fragmentConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_FRAGMENT_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (hullConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                hullConstantDefs->find(paramName);
-            if (parami != hullConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_HULL_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (domainConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                domainConstantDefs->find(paramName);
-            if (parami != domainConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_DOMAIN_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
-            }
-        }
-        if (computeConstantDefs)
-        {
-            GpuConstantDefinitionMap::const_iterator parami =
-                computeConstantDefs->find(paramName);
-            if (parami != computeConstantDefs->end())
-            {
-                refToUpdate.mSourceProgType = GPT_COMPUTE_PROGRAM;
-                refToUpdate.mConstantDef = &(parami->second);
-                return true;
+                GpuConstantDefinitionMap::const_iterator parami =
+                        constantDefs[i]->find(paramName);
+                if (parami != constantDefs[i]->end())
+                {
+                    refToUpdate.mSourceProgType = static_cast<GpuProgramType>(i);
+                    refToUpdate.mConstantDef = &(parami->second);
+                    return true;
+                }
             }
         }
         return false;
@@ -525,12 +568,7 @@ namespace Ogre {
     
     void GLSLProgramManager::extractUniformsFromProgram(
         GLuint programObject,
-        const GpuConstantDefinitionMap* vertexConstantDefs,
-        const GpuConstantDefinitionMap* hullConstantDefs,
-        const GpuConstantDefinitionMap* domainConstantDefs,
-        const GpuConstantDefinitionMap* geometryConstantDefs,
-        const GpuConstantDefinitionMap* fragmentConstantDefs,
-        const GpuConstantDefinitionMap* computeConstantDefs,
+        const GpuConstantDefinitionMap* (&constantDefs)[6],
         GLUniformReferenceList& uniformList,
         GLAtomicCounterReferenceList& counterList,
         GLUniformBufferList& uniformBufferList,
@@ -588,12 +626,7 @@ namespace Ogre {
                 }
 
                 // Find out which params object this comes from
-                bool foundSource = findUniformDataSource(
-                    paramName,
-                    vertexConstantDefs, geometryConstantDefs,
-                    fragmentConstantDefs, hullConstantDefs,
-                    domainConstantDefs, computeConstantDefs,
-                    newGLUniformReference);
+                bool foundSource = findUniformDataSource(paramName, constantDefs, newGLUniformReference);
 
                 // Only add this parameter if we found the source
                 if (foundSource)
@@ -638,15 +671,11 @@ namespace Ogre {
                     paramName = paramName.substr(0, arrayStart);
                 }
 
-                std::cout << "ATOMIC COUNTER FOUND: " << paramName  << " " << arraySize << std::endl;
+                printf("ATOMIC COUNTER FOUND: %s %d", paramName.c_str(), arraySize);
 
                 // Find out which params object this comes from
                 bool foundSource = findAtomicCounterDataSource(
-                    paramName,
-                    vertexConstantDefs, geometryConstantDefs,
-                    fragmentConstantDefs, hullConstantDefs,
-                    domainConstantDefs, computeConstantDefs,
-                    newGLAtomicCounterReference);
+                    paramName, constantDefs,newGLAtomicCounterReference);
 
                 // Only add this parameter if we found the source
                 if (foundSource)
@@ -757,8 +786,8 @@ namespace Ogre {
         // Now deal with shader storage blocks
 
         //TODO Need easier, more robust feature checking.
-        // if (mGLSupport.checkExtension("GL_ARB_program_interface_query") || gl3wIsSupported(4, 3))
-        if (mGLSupport.hasMinGLVersion(4, 3))
+        // if (mRenderSystem->checkExtension("GL_ARB_program_interface_query") || gl3wIsSupported(4, 3))
+        if (mRenderSystem->hasMinGLVersion(4, 3))
         {
             OGRE_CHECK_GL_ERROR(glGetProgramInterfaceiv(programObject, GL_SHADER_STORAGE_BLOCK, GL_ACTIVE_RESOURCES, &blockCount));
 
@@ -825,8 +854,8 @@ namespace Ogre {
                 OGRE_CHECK_GL_ERROR(glShaderStorageBlockBinding(programObject, index, bufferBinding));
             }
         }
-        // if (mGLSupport.checkExtension("GL_ARB_shader_atomic_counters") || gl3wIsSupported(4, 2))
-        if (mGLSupport.hasMinGLVersion(4, 2))
+        // if (mRenderSystem->checkExtension("GL_ARB_shader_atomic_counters") || gl3wIsSupported(4, 2))
+        if (mRenderSystem->hasMinGLVersion(4, 2))
         {
             // Now deal with atomic counters buffers
             OGRE_CHECK_GL_ERROR(glGetProgramiv(programObject, GL_ACTIVE_ATOMIC_COUNTER_BUFFERS, &blockCount));
@@ -850,283 +879,6 @@ namespace Ogre {
                 GL3PlusHardwareCounterBuffer* hwGlBuffer = static_cast<GL3PlusHardwareCounterBuffer*>(newCounterBuffer.get());
                 hwGlBuffer->setGLBufferBinding(bufferBinding);
                 counterBufferList.push_back(newCounterBuffer);
-            }
-        }
-    }
-    
-    void GLSLProgramManager::extractUniformsFromGLSL(
-        const String& src, GpuNamedConstants& defs, const String& filename)
-    {
-        // Parse the output string and collect all uniforms
-        // NOTE this relies on the source already having been preprocessed
-        // which is done in GLSLShader::loadFromSource
-        String line;
-        String::size_type currPos = src.find("uniform");
-        while (currPos != String::npos)
-        {
-            // Now check for using the word 'uniform' in a larger string & ignore
-            bool inLargerString = false;
-            if (currPos != 0)
-            {
-                char prev = src.at(currPos - 1);
-                if (prev != ' ' && prev != '\t' && prev != '\r' && prev != '\n'
-                    && prev != ';')
-                    inLargerString = true;
-            }
-            if (!inLargerString && currPos + 7 < src.size())
-            {
-                char next = src.at(currPos + 7);
-                if (next != ' ' && next != '\t' && next != '\r' && next != '\n')
-                    inLargerString = true;
-            }
-
-            // skip 'uniform'
-            currPos += 7;
-
-            if (!inLargerString)
-            {
-                String::size_type endPos;
-                GpuSharedParametersPtr blockSharedParams;
-
-                // Check for a type. If there is one, then the
-                // semicolon is missing.  Otherwise treat as if it is
-                // a uniform block.
-                String::size_type lineEndPos = src.find_first_of("\n\r", currPos);
-                line = src.substr(currPos, lineEndPos - currPos);
-                StringVector parts = StringUtil::split(line, " \t");
-                StringToEnumMap::iterator typei = mTypeEnumMap.find(parts.front());
-                if (typei == mTypeEnumMap.end())
-                {
-                    // Gobble up the external name
-                    String externalName = parts.front();
-
-                    // Now there should be an opening brace
-                    String::size_type openBracePos = src.find("{", currPos);
-                    if (openBracePos != String::npos)
-                    {
-                        currPos = openBracePos + 1;
-                    }
-                    else
-                    {
-                        LogManager::getSingleton().logMessage("Missing opening brace in GLSL Uniform Block in file "
-                                                              + filename, LML_CRITICAL);
-                        break;
-                    }
-
-                    // First we need to find the internal name for the uniform block
-                    String::size_type endBracePos = src.find("}", currPos);
-
-                    // Find terminating semicolon
-                    currPos = endBracePos + 1;
-                    endPos = src.find(";", currPos);
-                    if (endPos == String::npos)
-                    {
-                        // problem, missing semicolon, abort
-                        break;
-                    }
-
-                    // TODO: We don't need the internal name. Just skip over to the end of the block
-                    // But we do need to know if this is an array of blocks. Is that legal?
-
-                    // // Find the internal name.
-                    // // This can be an array.
-                    // line = src.substr(currPos, endPos - currPos);
-                    // StringVector internalParts = StringUtil::split(line, ", \t\r\n");
-                    // String internalName = "";
-                    // uint16 arraySize = 0;
-                    // for (StringVector::iterator i = internalParts.begin(); i != internalParts.end(); ++i)
-                    // {
-                    //     StringUtil::trim(*i);
-                    //     String::size_type arrayStart = i->find("[", 0);
-                    //     if (arrayStart != String::npos)
-                    //     {
-                    //         // potential name (if butted up to array)
-                    //         String name = i->substr(0, arrayStart);
-                    //         StringUtil::trim(name);
-                    //         if (!name.empty())
-                    //             internalName = name;
-
-                    //         String::size_type arrayEnd = i->find("]", arrayStart);
-                    //         String arrayDimTerm = i->substr(arrayStart + 1, arrayEnd - arrayStart - 1);
-                    //         StringUtil::trim(arrayDimTerm);
-                    //         arraySize = StringConverter::parseUnsignedInt(arrayDimTerm);
-                    //     }
-                    //     else
-                    //     {
-                    //         internalName = *i;
-                    //     }
-                    // }
-
-                    // // Ok, now rewind and parse the individual uniforms in this block
-                    // currPos = openBracePos + 1;
-                    // blockSharedParams = GpuProgramManager::getSingleton().getSharedParameters(externalName);
-                    // if(!blockSharedParams)
-                    //     blockSharedParams = GpuProgramManager::getSingleton().createSharedParameters(externalName);
-                    // do
-                    // {
-                    //     lineEndPos = src.find_first_of("\n\r", currPos);
-                    //     endPos = src.find(";", currPos);
-                    //     line = src.substr(currPos, endPos - currPos);
-
-                    //     // TODO: Give some sort of block id
-                    //     // Parse the normally structured uniform
-                    //     parseIndividualConstant(src, defs, currPos, filename, blockSharedParams);
-                    //     currPos = lineEndPos + 1;
-                    // } while (endBracePos > currPos);
-                }
-                else
-                {
-                    // find terminating semicolon
-                    endPos = src.find(";", currPos);
-                    if (endPos == String::npos)
-                    {
-                        // problem, missing semicolon, abort
-                        break;
-                    }
-
-                    parseGLSLUniform(src, defs, currPos, filename, blockSharedParams);
-                }
-                line = src.substr(currPos, endPos - currPos);
-            } // not commented or a larger symbol
-
-            // Find next one
-            currPos = src.find("uniform", currPos);
-        }
-    }
-
-    
-    void GLSLProgramManager::parseGLSLUniform(
-        const String& src, GpuNamedConstants& defs,
-        String::size_type currPos,
-        const String& filename, GpuSharedParametersPtr sharedParams)
-    {
-        GpuConstantDefinition def;
-        String paramName = "";
-        String::size_type endPos = src.find(";", currPos);
-        String line = src.substr(currPos, endPos - currPos);
-
-        // Remove spaces before opening square braces, otherwise
-        // the following split() can split the line at inappropriate
-        // places (e.g. "vec3 something [3]" won't work).
-        //FIXME What are valid ways of including spaces in GLSL
-        // variable declarations?  May need regex.
-        for (String::size_type sqp = line.find (" ["); sqp != String::npos;
-             sqp = line.find (" ["))
-            line.erase (sqp, 1);
-        // Split into tokens
-        StringVector parts = StringUtil::split(line, ", \t\r\n");
-
-        for (StringVector::iterator i = parts.begin(); i != parts.end(); ++i)
-        {
-            // Is this a type?
-            StringToEnumMap::iterator typei = mTypeEnumMap.find(*i);
-            if (typei != mTypeEnumMap.end())
-            {
-                convertGLUniformtoOgreType(typei->second, def);
-            }
-            else
-            {
-                // if this is not a type, and not empty, it should be a name
-                StringUtil::trim(*i);
-                if (i->empty()) continue;
-
-                // Skip over precision keywords
-                if(StringUtil::match((*i), "lowp") ||
-                   StringUtil::match((*i), "mediump") ||
-                   StringUtil::match((*i), "highp"))
-                    continue;
-
-                String::size_type arrayStart = i->find("[", 0);
-                if (arrayStart != String::npos)
-                {
-                    // potential name (if butted up to array)
-                    String name = i->substr(0, arrayStart);
-                    StringUtil::trim(name);
-                    if (!name.empty())
-                        paramName = name;
-
-                    def.arraySize = 1;
-
-                    // N-dimensional arrays
-                    while (arrayStart != String::npos) {
-                        String::size_type arrayEnd = i->find("]", arrayStart);
-                        String arrayDimTerm = i->substr(arrayStart + 1, arrayEnd - arrayStart - 1);
-                        StringUtil::trim(arrayDimTerm);
-                        //TODO
-                        // the array term might be a simple number or it might be
-                        // an expression (e.g. 24*3) or refer to a constant expression
-                        // we'd have to evaluate the expression which could get nasty
-                        def.arraySize *= StringConverter::parseInt(arrayDimTerm);
-                        arrayStart = i->find("[", arrayEnd);
-                    }
-                }
-                else
-                {
-                    paramName = *i;
-                    def.arraySize = 1;
-                }
-
-                // Name should be after the type, so complete def and add
-                // We do this now so that comma-separated params will do
-                // this part once for each name mentioned
-                if (def.constType == GCT_UNKNOWN)
-                {
-                    LogManager::getSingleton().logMessage("Problem parsing the following GLSL Uniform: '"
-                                                          + line + "' in file " + filename, LML_CRITICAL);
-                    // next uniform
-                    break;
-                }
-
-                // Special handling for shared parameters
-                if(!sharedParams)
-                {
-                    // Complete def and add
-                    // increment physical buffer location
-                    def.logicalIndex = 0; // not valid in GLSL
-                    if (def.isFloat())
-                    {
-                        def.physicalIndex = defs.floatBufferSize;
-                        defs.floatBufferSize += def.arraySize * def.elementSize;
-                    }
-                    else if (def.isDouble())
-                    {
-                        def.physicalIndex = defs.doubleBufferSize;
-                        defs.doubleBufferSize += def.arraySize * def.elementSize;
-                    }
-                    else if (def.isInt() || def.isSampler())
-                    {
-                        def.physicalIndex = defs.intBufferSize;
-                        defs.intBufferSize += def.arraySize * def.elementSize;
-                    }
-                    else if (def.isUnsignedInt() || def.isBool())
-                    {
-                        def.physicalIndex = defs.uintBufferSize;
-                        defs.uintBufferSize += def.arraySize * def.elementSize;
-                    }
-                    // else if (def.isBool())
-                    // {
-                    //     def.physicalIndex = defs.boolBufferSize;
-                    //     defs.boolBufferSize += def.arraySize * def.elementSize;
-                    // }
-                    else
-                    {
-                        LogManager::getSingleton().logMessage("Could not parse type of GLSL Uniform: '"
-                                                              + line + "' in file " + filename);
-                    }
-                    defs.map.insert(GpuConstantDefinitionMap::value_type(paramName, def));
-
-                    // Generate array accessors
-                    defs.generateConstantDefinitionArrayEntries(paramName, def);
-                }
-                else
-                {
-                    const GpuConstantDefinitionMap& map = sharedParams->getConstantDefinitions().map;
-
-                    if(map.find(paramName) == map.end()) {
-                        // This constant doesn't exist so we'll create a new one
-                        sharedParams->addConstantDefinition(paramName, def.constType);
-                    }
-                }
             }
         }
     }

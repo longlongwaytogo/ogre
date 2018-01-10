@@ -95,6 +95,8 @@ namespace Ogre
     {  
         assert( msSingleton );  return ( *msSingleton );  
     }
+    // need to implement in cpp due to how Ogre::Singleton works
+    TerrainGlobalOptions::~TerrainGlobalOptions() {}
     //---------------------------------------------------------------------
     TerrainGlobalOptions::TerrainGlobalOptions()
         : mSkirtSize(30)
@@ -375,9 +377,9 @@ namespace Ogre
         {
             if (mLayerBlendMapSize != mLayerBlendMapSizeActual)
             {
-                LogManager::getSingleton().stream() << 
-                    "WARNING: blend maps were requested at a size larger than was supported "
-                    "on this hardware, which means the quality has been degraded";
+                LogManager::getSingleton().logWarning(
+                    "blend maps were requested at a size larger than was supported "
+                    "on this hardware, which means the quality has been degraded");
             }
             stream.write(&mLayerBlendMapSizeActual);
             uint8* tmpData = (uint8*)OGRE_MALLOC(mLayerBlendMapSizeActual * mLayerBlendMapSizeActual * 4, MEMCATEGORY_GENERAL);
@@ -2849,7 +2851,7 @@ namespace Ogre
         HardwarePixelBufferSharedPtr destBuffer = getLayerBlendTexture(destIndex)->getBuffer();
 
         unsigned char rgbaShift[4];
-        Image::Box box(0, 0, destBuffer->getWidth(), destBuffer->getHeight());
+        Box box(0, 0, destBuffer->getWidth(), destBuffer->getHeight());
 
         uint8* pDestBase = static_cast<uint8*>(destBuffer->lock(box, HardwareBuffer::HBL_NORMAL).data);
         PixelUtil::getBitShifts(destBuffer->getFormat(), rgbaShift);
@@ -2892,7 +2894,7 @@ namespace Ogre
         HardwarePixelBufferSharedPtr buffer = getLayerBlendTexture(index)->getBuffer();
 
         unsigned char rgbaShift[4];
-        Image::Box box(0, 0, buffer->getWidth(), buffer->getHeight());
+        Box box(0, 0, buffer->getWidth(), buffer->getHeight());
 
         uint8* pData = static_cast<uint8*>(buffer->lock(box, HardwareBuffer::HBL_NORMAL).data);
         PixelUtil::getBitShifts(buffer->getFormat(), rgbaShift);
@@ -3418,7 +3420,7 @@ namespace Ogre
             {
                 // content of normalsBox is already inverted in Y, but rect is still 
                 // in terrain space for dealing with sub-rect, so invert
-                Image::Box dstBox;
+                Box dstBox;
                 dstBox.left = static_cast<uint32>(rect.left);
                 dstBox.right = static_cast<uint32>(rect.right);
                 dstBox.top = static_cast<uint32>(mSize - rect.bottom);
@@ -3590,7 +3592,7 @@ namespace Ogre
             {
                 // content of PixelBox is already inverted in Y, but rect is still 
                 // in terrain space for dealing with sub-rect, so invert
-                Image::Box dstBox;
+                Box dstBox;
                 dstBox.left = static_cast<uint32>(rect.left);
                 dstBox.right = static_cast<uint32>(rect.right);
                 dstBox.top = static_cast<uint32>(mLightmapSizeActual - rect.bottom);

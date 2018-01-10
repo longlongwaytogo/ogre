@@ -29,9 +29,8 @@
 #include "OgreGLSLMonolithicProgram.h"
 #include "OgreGLSLExtSupport.h"
 #include "OgreGLSLShader.h"
-#include "OgreGLSLMonolithicProgramManager.h"
+#include "OgreGLSLProgramManager.h"
 #include "OgreGL3PlusRenderSystem.h"
-#include "OgreGL3PlusVertexArrayObject.h"
 #include "OgreStringVector.h"
 #include "OgreLogManager.h"
 #include "OgreGpuProgramManager.h"
@@ -60,16 +59,6 @@ namespace Ogre {
         OGRE_CHECK_GL_ERROR(glDeleteProgram(mGLProgramHandle));
     }
 
-
-    void GLSLMonolithicProgram::_useProgram(void)
-    {
-        if (mLinked)
-        {
-            OGRE_CHECK_GL_ERROR(glUseProgram(mGLProgramHandle));
-        }
-    }
-
-
     void GLSLMonolithicProgram::activate(void)
     {
         if (!mLinked && !mTriedToLinkAndFailed)
@@ -90,15 +79,15 @@ namespace Ogre {
             buildGLUniformReferences();
         }
 
-        _useProgram();
+        if (mLinked)
+        {
+            OGRE_CHECK_GL_ERROR(glUseProgram(mGLProgramHandle));
+        }
     }
 
 
     void GLSLMonolithicProgram::compileAndLink()
     {
-        mVertexArrayObject = new GL3PlusVertexArrayObject();
-        mVertexArrayObject->bind();
-
         // Compile and attach Vertex Program
         if (mVertexShader)
         {
@@ -166,6 +155,8 @@ namespace Ogre {
             mComputeShader->attachToProgramObject(mGLProgramHandle);
         }
 
+        bindFixedAttributes(mGLProgramHandle);
+
         // the link
         OGRE_CHECK_GL_ERROR(glLinkProgram( mGLProgramHandle ));
         OGRE_CHECK_GL_ERROR(glGetProgramiv( mGLProgramHandle, GL_LINK_STATUS, &mLinked ));
@@ -208,46 +199,29 @@ namespace Ogre {
 
     void GLSLMonolithicProgram::buildGLUniformReferences(void)
     {
-        if (!mUniformRefsBuilt)
+        if (mUniformRefsBuilt)
         {
-            const GpuConstantDefinitionMap* vertParams = 0;
-            const GpuConstantDefinitionMap* hullParams = 0;
-            const GpuConstantDefinitionMap* domainParams = 0;
-            const GpuConstantDefinitionMap* fragParams = 0;
-            const GpuConstantDefinitionMap* geomParams = 0;
-            const GpuConstantDefinitionMap* computeParams = 0;
-            if (mVertexShader)
-            {
-                vertParams = &(mVertexShader->getConstantDefinitions().map);
-            }
-            if (mHullShader)
-            {
-                hullParams = &(mHullShader->getConstantDefinitions().map);
-            }
-            if (mDomainShader)
-            {
-                domainParams = &(mDomainShader->getConstantDefinitions().map);
-            }
-            if (mGeometryShader)
-            {
-                geomParams = &(mGeometryShader->getConstantDefinitions().map);
-            }
-            if (mFragmentShader)
-            {
-                fragParams = &(mFragmentShader->getConstantDefinitions().map);
-            }
-            if (mComputeShader)
-            {
-                computeParams = &(mComputeShader->getConstantDefinitions().map);
-            }
-
-            // Do we know how many shared params there are yet? Or if there are any blocks defined?
-            GLSLMonolithicProgramManager::getSingleton().extractUniformsFromProgram(
-                mGLProgramHandle, vertParams, geomParams, fragParams, hullParams, domainParams, computeParams,
-                mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-
-            mUniformRefsBuilt = true;
+            return;
         }
+
+        // order must match GpuProgramType
+        GLSLShader* shaders[6] = {getVertexShader(), mFragmentShader, mGeometryShader, mDomainShader, mHullShader, mComputeShader};
+        const GpuConstantDefinitionMap* params[6] = { NULL };
+
+        for (int i = 0; i < 6; i++)
+        {
+            if (!shaders[i])
+                continue;
+
+            params[i] = &(shaders[i]->getConstantDefinitions().map);
+        }
+
+        // Do we know how many shared params there are yet? Or if there are any blocks defined?
+        GLSLProgramManager::getSingleton().extractUniformsFromProgram(
+            mGLProgramHandle, params, mGLUniformReferences, mGLAtomicCounterReferences,
+            mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
+
+        mUniformRefsBuilt = true;
     }
 
 

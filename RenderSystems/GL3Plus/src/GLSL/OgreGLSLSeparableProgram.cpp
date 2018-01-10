@@ -29,10 +29,12 @@
 #include "OgreGLSLSeparableProgram.h"
 #include "OgreStringConverter.h"
 #include "OgreGLSLShader.h"
-#include "OgreGLSLSeparableProgramManager.h"
+#include "OgreGLSLProgramManager.h"
 #include "OgreGpuProgramManager.h"
 #include "OgreGLUtil.h"
 #include "OgreLogManager.h"
+#include "OgreGLUniformCache.h"
+#include "OgreGL3PlusStateCacheManager.h"
 
 namespace Ogre
 {
@@ -49,7 +51,6 @@ namespace Ogre
                     fragmentShader,
                     computeShader)
     {
-        mVertexArrayObject = new GL3PlusVertexArrayObject();
     }
 
     GLSLSeparableProgram::~GLSLSeparableProgram()
@@ -64,8 +65,6 @@ namespace Ogre
 
         OGRE_CHECK_GL_ERROR(glGenProgramPipelines(1, &mGLProgramPipelineHandle));
         //OGRE_CHECK_GL_ERROR(glBindProgramPipeline(mGLProgramPipelineHandle));
-
-        mVertexArrayObject->bind();
 
         loadIndividualProgram(getVertexShader());
         loadIndividualProgram(mDomainShader);
@@ -186,6 +185,9 @@ namespace Ogre
                         return;
                     }
 
+                    if( program->getType() == GPT_VERTEX_PROGRAM )
+                        bindFixedAttributes( programHandle );
+
                     program->attachToProgramObject(programHandle);
                     OGRE_CHECK_GL_ERROR(glLinkProgram(programHandle));
                     OGRE_CHECK_GL_ERROR(glGetProgramiv(programHandle, GL_LINK_STATUS, &linkStatus));
@@ -241,47 +243,6 @@ namespace Ogre
         }
     }
 
-    // void GLSLSeparableProgram::_useProgram(void)
-    // {
-    //     if (mLinked)
-    //     {
-    //        OGRE_CHECK_GL_ERROR(glBindProgramPipeline(mGLProgramPipelineHandle));
-    //     }
-    // }
-
-
-    GLint GLSLSeparableProgram::getAttributeIndex(VertexElementSemantic semantic, uint index)
-    {
-        GLint res = mCustomAttributesIndexes[semantic-1][index];
-        if (res == NULL_CUSTOM_ATTRIBUTES_INDEX)
-        {
-            GLuint handle = getVertexShader()->getGLProgramHandle();
-            const char * attString = getAttributeSemanticString(semantic);
-            GLint attrib;
-            OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(handle, attString));
-
-            // Sadly position is a special case.
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX && semantic == VES_POSITION)
-            {
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(handle, "position"));
-            }
-
-            // For UV and other cases the index is a part of the name.
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX)
-            {
-                String attStringWithSemantic = String(attString) + StringConverter::toString(index);
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(handle, attStringWithSemantic.c_str()));
-            }
-
-            // Update mCustomAttributesIndexes with the index we found (or didn't find)
-            mCustomAttributesIndexes[semantic - 1][index] = attrib;
-            res = attrib;
-        }
-
-        return res;
-    }
-
-
     void GLSLSeparableProgram::activate(void)
     {
         if (!mLinked && !mTriedToLinkAndFailed)
@@ -293,81 +254,43 @@ namespace Ogre
             buildGLUniformReferences();
         }
 
-        // _useProgram();
-
-
         if (mLinked)
         {
-            OGRE_CHECK_GL_ERROR(glBindProgramPipeline(mGLProgramPipelineHandle));
+            GLSLProgramManager::getSingleton().getStateCacheManager()->bindGLProgramPipeline(mGLProgramPipelineHandle);
         }
     }
 
 
     void GLSLSeparableProgram::buildGLUniformReferences(void)
     {
-        if (!mUniformRefsBuilt)
+        if (mUniformRefsBuilt)
         {
-            const GpuConstantDefinitionMap* vertParams = 0;
-            const GpuConstantDefinitionMap* hullParams = 0;
-            const GpuConstantDefinitionMap* domainParams = 0;
-            const GpuConstantDefinitionMap* geomParams = 0;
-            const GpuConstantDefinitionMap* fragParams = 0;
-            const GpuConstantDefinitionMap* computeParams = 0;
-            if (mVertexShader)
-            {
-                vertParams = &(mVertexShader->getConstantDefinitions().map);
-                GLSLSeparableProgramManager::getSingleton().extractUniformsFromProgram(getVertexShader()->getGLProgramHandle(),
-                                                                                       vertParams, NULL, NULL, NULL, NULL, NULL,
-                                                                                       mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-            }
-            if (mHullShader)
-            {
-                hullParams = &(mHullShader->getConstantDefinitions().map);
-                GLSLSeparableProgramManager::getSingleton().extractUniformsFromProgram(mHullShader->getGLProgramHandle(),
-                                                                                       NULL, NULL, NULL, hullParams, NULL, NULL,
-                                                                                       mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-            }
-            if (mDomainShader)
-            {
-                domainParams = &(mDomainShader->getConstantDefinitions().map);
-                GLSLSeparableProgramManager::getSingleton().extractUniformsFromProgram(mDomainShader->getGLProgramHandle(),
-                                                                                       NULL, NULL, NULL, NULL, domainParams, NULL,
-                                                                                       mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-            }
-            if (mGeometryShader)
-            {
-                geomParams = &(mGeometryShader->getConstantDefinitions().map);
-                GLSLSeparableProgramManager::getSingleton().extractUniformsFromProgram(mGeometryShader->getGLProgramHandle(),
-                                                                                       NULL, geomParams, NULL, NULL, NULL, NULL,
-                                                                                       mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-            }
-            if (mFragmentShader)
-            {
-                fragParams = &(mFragmentShader->getConstantDefinitions().map);
-                GLSLSeparableProgramManager::getSingleton().extractUniformsFromProgram(mFragmentShader->getGLProgramHandle(),
-                                                                                       NULL, NULL, fragParams, NULL, NULL, NULL,
-                                                                                       mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-            }
-            if (mComputeShader)
-            {
-                computeParams = &(mComputeShader->getConstantDefinitions().map);
-                GLSLSeparableProgramManager::getSingleton().extractUniformsFromProgram(mComputeShader->getGLProgramHandle(),
-                                                                                       NULL, NULL, NULL, NULL, NULL, computeParams,
-                                                                                       mGLUniformReferences, mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap, mGLCounterBufferReferences);
-            }
-
-            mUniformRefsBuilt = true;
+            return;
         }
+
+        // order must match GpuProgramType
+        GLSLShader* shaders[6] = {getVertexShader(), mFragmentShader, mGeometryShader, mDomainShader, mHullShader, mComputeShader};
+
+        for (int i = 0; i < 6; i++)
+        {
+            if (!shaders[i])
+                continue;
+
+            const GpuConstantDefinitionMap* params[6] = {NULL};
+            params[i] = &(shaders[i]->getConstantDefinitions().map);
+            GLSLProgramManager::getSingleton().extractUniformsFromProgram(
+                shaders[i]->getGLProgramHandle(), params, mGLUniformReferences,
+                mGLAtomicCounterReferences, mGLUniformBufferReferences, mSharedParamsBufferMap,
+                mGLCounterBufferReferences);
+        }
+
+        mUniformRefsBuilt = true;
     }
 
 
     void GLSLSeparableProgram::updateUniforms(GpuProgramParametersSharedPtr params,
                                               uint16 mask, GpuProgramType fromProgType)
     {
-        // Iterate through uniform reference list and update uniform values
-        GLUniformReferenceIterator currentUniform = mGLUniformReferences.begin();
-        GLUniformReferenceIterator endUniform = mGLUniformReferences.end();
-
         // determine if we need to transpose matrices when binding
         int transpose = GL_TRUE;
         if ((fromProgType == GPT_FRAGMENT_PROGRAM && mVertexShader && (!getVertexShader()->getColumnMajorMatrices())) ||
@@ -381,31 +304,41 @@ namespace Ogre
         }
 
         GLuint progID = 0;
+        GLUniformCache * uniformCache=0;
         if (fromProgType == GPT_VERTEX_PROGRAM)
         {
             progID = getVertexShader()->getGLProgramHandle();
+            uniformCache = getVertexShader()->getUniformCache();
         }
         else if (fromProgType == GPT_FRAGMENT_PROGRAM)
         {
             progID = mFragmentShader->getGLProgramHandle();
+            uniformCache = mFragmentShader->getUniformCache();
         }
         else if (fromProgType == GPT_GEOMETRY_PROGRAM)
         {
             progID = mGeometryShader->getGLProgramHandle();
+            uniformCache = mGeometryShader->getUniformCache();
         }
         else if (fromProgType == GPT_HULL_PROGRAM)
         {
             progID = mHullShader->getGLProgramHandle();
+            uniformCache = mHullShader->getUniformCache();
         }
         else if (fromProgType == GPT_DOMAIN_PROGRAM)
         {
             progID = mDomainShader->getGLProgramHandle();
+            uniformCache = mDomainShader->getUniformCache();
         }
         else if (fromProgType == GPT_COMPUTE_PROGRAM)
         {
             progID = mComputeShader->getGLProgramHandle();
+            uniformCache = mComputeShader->getUniformCache();
         }
 
+        // Iterate through uniform reference list and update uniform values
+        GLUniformReferenceIterator currentUniform = mGLUniformReferences.begin();
+        GLUniformReferenceIterator endUniform = mGLUniformReferences.end();
         for (; currentUniform != endUniform; ++currentUniform)
         {
             // Only pull values from buffer it's supposed to be in (vertex or fragment)
@@ -416,6 +349,37 @@ namespace Ogre
                 if (def->variability & mask)
                 {
                     GLsizei glArraySize = (GLsizei)def->arraySize;
+
+                    bool shouldUpdate = true;
+
+                    switch (def->constType)
+                    {
+                        case GCT_INT1:
+                        case GCT_INT2:
+                        case GCT_INT3:
+                        case GCT_INT4:
+                        case GCT_SAMPLER1D:
+                        case GCT_SAMPLER1DSHADOW:
+                        case GCT_SAMPLER2D:
+                        case GCT_SAMPLER2DSHADOW:
+                        case GCT_SAMPLER2DARRAY:
+                        case GCT_SAMPLER3D:
+                        case GCT_SAMPLERCUBE:
+                            shouldUpdate = uniformCache->updateUniform(currentUniform->mLocation,
+                                                                        params->getIntPointer(def->physicalIndex),
+                                                                        static_cast<GLsizei>(def->elementSize * def->arraySize * sizeof(int)));
+                            break;
+                        default:
+                            shouldUpdate = uniformCache->updateUniform(currentUniform->mLocation,
+                                                                        params->getFloatPointer(def->physicalIndex),
+                                                                        static_cast<GLsizei>(def->elementSize * def->arraySize * sizeof(float)));
+                            break;
+
+                    }
+                    if(!shouldUpdate)
+                    {
+                        continue;
+                    }
 
                     // Get the index in the parameter real list
                     switch (def->constType)

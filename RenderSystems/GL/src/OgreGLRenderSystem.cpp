@@ -28,7 +28,7 @@ THE SOFTWARE.
 
 
 #include "OgreGLRenderSystem.h"
-#include "OgreRenderSystem.h"
+#include "OgreGLSupport.h"
 #include "OgreLogManager.h"
 #include "OgreStringConverter.h"
 #include "OgreLight.h"
@@ -36,7 +36,7 @@ THE SOFTWARE.
 #include "OgreGLTextureManager.h"
 #include "OgreGLHardwareVertexBuffer.h"
 #include "OgreGLHardwareIndexBuffer.h"
-#include "OgreGLDefaultHardwareBufferManager.h"
+#include "OgreDefaultHardwareBufferManager.h"
 #include "OgreGLUtil.h"
 #include "OgreGLGpuProgram.h"
 #include "OgreGLGpuNvparseProgram.h"
@@ -58,13 +58,19 @@ THE SOFTWARE.
 
 #include "OgreGLPixelFormat.h"
 
+#include "OgreGLSLProgramCommon.h"
+
+#if OGRE_PLATFORM == OGRE_PLATFORM_APPLE
+extern "C" void glFlushRenderAPPLE();
+#endif
+
 // Convenience macro from ARB_vertex_buffer_object spec
 #define VBO_BUFFER_OFFSET(i) ((char *)NULL + (i))
 
 namespace Ogre {
 
     // Callback function used when registering GLGpuPrograms
-    GpuProgram* createGLArbGpuProgram(ResourceManager* creator,
+    static GpuProgram* createGLArbGpuProgram(ResourceManager* creator,
                                       const String& name, ResourceHandle handle,
                                       const String& group, bool isManual, ManualResourceLoader* loader,
                                       GpuProgramType gptype, const String& syntaxCode)
@@ -76,7 +82,7 @@ namespace Ogre {
         return ret;
     }
 
-    GpuProgram* createGLGpuNvparseProgram(ResourceManager* creator,
+    static GpuProgram* createGLGpuNvparseProgram(ResourceManager* creator,
                                           const String& name, ResourceHandle handle,
                                           const String& group, bool isManual, ManualResourceLoader* loader,
                                           GpuProgramType gptype, const String& syntaxCode)
@@ -88,7 +94,7 @@ namespace Ogre {
         return ret;
     }
 
-    GpuProgram* createGL_ATI_FS_GpuProgram(ResourceManager* creator,
+    static GpuProgram* createGL_ATI_FS_GpuProgram(ResourceManager* creator,
                                            const String& name, ResourceHandle handle,
                                            const String& group, bool isManual, ManualResourceLoader* loader,
                                            GpuProgramType gptype, const String& syntaxCode)
@@ -111,6 +117,7 @@ namespace Ogre {
         mHardwareBufferManager(0),
         mGpuProgramManager(0),
         mGLSLProgramFactory(0),
+        mStateCacheManager(0),
         mRTTManager(0),
         mActiveTextureUnit(0),
         mMaxBuiltInTextureAttribIndex(0)
@@ -203,15 +210,16 @@ namespace Ogre {
     {
         mGLSupport->start();
 
-        if(!mStateCacheManager)
-            mStateCacheManager = OGRE_NEW GLStateCacheManager();
-
-        mGLSupport->setStateCacheManager(mStateCacheManager);
-
         // Create the texture manager
-        mTextureManager = new GLTextureManager(*mGLSupport);
+        mTextureManager = new GLTextureManager(this);
 
-        RenderWindow* autoWindow = mGLSupport->createWindow(autoCreateWindow, this, windowTitle);
+        RenderWindow* autoWindow = NULL;
+        if(autoCreateWindow) {
+            uint w, h;
+            bool fullscreen;
+            NameValuePairList misc = mGLSupport->parseOptions(w, h, fullscreen);
+            autoWindow = _createRenderWindow(windowTitle, w, h, fullscreen, &misc);
+        }
 
         RenderSystem::_initialise(autoCreateWindow, windowTitle);
 
@@ -286,7 +294,7 @@ namespace Ogre {
                 if (arbUnits > units)
                     units = arbUnits;
             }
-            rsc->setNumTextureUnits(std::min<ushort>(16, units));
+            rsc->setNumTextureUnits(std::min(OGRE_MAX_TEXTURE_LAYERS, units));
         }
         else
         {
@@ -297,6 +305,9 @@ namespace Ogre {
         // Check for Anisotropy support
         if(GLEW_EXT_texture_filter_anisotropic)
         {
+            GLfloat maxAnisotropy = 0;
+            glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxAnisotropy);
+            rsc->setMaxSupportedAnisotropy(maxAnisotropy);
             rsc->setCapability(RSC_ANISOTROPY);
         }
 
@@ -355,6 +366,7 @@ namespace Ogre {
                 rsc->setCapability(RSC_GL1_5_NOVBO);
             }
             rsc->setCapability(RSC_VBO);
+            rsc->setCapability(RSC_MAPBUFFER);
             rsc->setCapability(RSC_32BIT_INDEX);
         }
 
@@ -370,6 +382,10 @@ namespace Ogre {
             glGetProgramivARB(GL_VERTEX_PROGRAM_ARB, GL_MAX_PROGRAM_LOCAL_PARAMETERS_ARB, &floatConstantCount);
             rsc->setVertexProgramConstantFloatCount(floatConstantCount);
 
+            GLint attrs;
+            glGetIntegerv( GL_MAX_VERTEX_ATTRIBS_ARB, &attrs);
+            rsc->setNumVertexAttributes(attrs);
+
             rsc->addShaderProfile("arbvp1");
             if (GLEW_NV_vertex_program2_option)
             {
@@ -381,7 +397,7 @@ namespace Ogre {
                 rsc->addShaderProfile("vp40");
             }
 
-            if (GLEW_NV_vertex_program4)
+            if (GLEW_NV_gpu_program4)
             {
                 rsc->addShaderProfile("gp4vp");
                 rsc->addShaderProfile("gpu_vp");
@@ -436,7 +452,7 @@ namespace Ogre {
                 rsc->addShaderProfile("fp40");
             }
 
-            if (GLEW_NV_fragment_program4)
+            if (GLEW_NV_gpu_program4)
             {
                 rsc->addShaderProfile("gp4fp");
                 rsc->addShaderProfile("gpu_fp");
@@ -464,12 +480,6 @@ namespace Ogre {
             GLEW_EXT_geometry_shader4)
         {
             rsc->setCapability(RSC_GEOMETRY_PROGRAM);
-            rsc->addShaderProfile("nvgp4");
-
-            //Also add the CG profiles
-            rsc->addShaderProfile("gpu_gp");
-            rsc->addShaderProfile("gp4gp");
-
             rsc->setGeometryProgramConstantBoolCount(0);
             rsc->setGeometryProgramConstantIntCount(0);
 
@@ -480,6 +490,16 @@ namespace Ogre {
             GLint maxOutputVertices;
             glGetIntegerv(GL_MAX_GEOMETRY_OUTPUT_VERTICES_EXT,&maxOutputVertices);
             rsc->setGeometryProgramNumOutputVertices(maxOutputVertices);
+        }
+
+        if(GLEW_NV_gpu_program4)
+        {
+            rsc->setCapability(RSC_GEOMETRY_PROGRAM);
+            rsc->addShaderProfile("nvgp4");
+
+            //Also add the CG profiles
+            rsc->addShaderProfile("gpu_gp");
+            rsc->addShaderProfile("gp4gp");
         }
 
         if (mGLSupport->checkExtension("GL_ARB_get_program_binary"))
@@ -719,7 +739,7 @@ namespace Ogre {
         }
         else
         {
-            mHardwareBufferManager = new GLDefaultHardwareBufferManager;
+            mHardwareBufferManager = new DefaultHardwareBufferManager;
         }
 
         // XXX Need to check for nv2 support and make a program manager for it
@@ -1147,8 +1167,13 @@ namespace Ogre {
             GLRenderBuffer *depthBuffer = new GLRenderBuffer( depthFormat, fbo->getWidth(),
                                                               fbo->getHeight(), fbo->getFSAA() );
 
-            GLRenderBuffer *stencilBuffer = depthBuffer;
-            if( depthFormat != GL_DEPTH24_STENCIL8_EXT && stencilFormat )
+            GLRenderBuffer *stencilBuffer = NULL;
+            if ( depthFormat == GL_DEPTH24_STENCIL8_EXT)
+            {
+                // If we have a packed format, the stencilBuffer is the same as the depthBuffer
+                stencilBuffer = depthBuffer;
+            }
+            else if(stencilFormat)
             {
                 stencilBuffer = new GLRenderBuffer( stencilFormat, fbo->getWidth(),
                                                     fbo->getHeight(), fbo->getFSAA() );
@@ -1189,7 +1214,7 @@ namespace Ogre {
         // Get extension function pointers
         glewInit();
 
-        switchContextCache(mCurrentContext);
+        mStateCacheManager = mCurrentContext->createOrRetrieveStateCacheManager<GLStateCacheManager>();
     }
 
 
@@ -1469,13 +1494,9 @@ namespace Ogre {
             else
                 maxSize = maxSize * mActiveViewport->getActualHeight();
 
-            // XXX: why do I need this for results to be consistent with D3D?
-            // Equations are supposedly the same once you factor in vp height
-            Real correction = 0.005;
-            // scaling required
             val[0] = constant;
-            val[1] = linear * correction;
-            val[2] = quadratic * correction;
+            val[1] = linear;
+            val[2] = quadratic;
 
             if (mCurrentCapabilities->hasCapability(RSC_VERTEX_PROGRAM))
                 mStateCacheManager->setEnabled(GL_VERTEX_PROGRAM_POINT_SIZE, true);
@@ -1516,7 +1537,6 @@ namespace Ogre {
     //-----------------------------------------------------------------------------
     void GLRenderSystem::_setTexture(size_t stage, bool enabled, const TexturePtr &texPtr)
     {
-        GLTexturePtr tex = static_pointer_cast<GLTexture>(texPtr);
         GLenum lastTextureType = mTextureTypes[stage];
 
         if (!mStateCacheManager->activateGLTextureUnit(stage))
@@ -1524,15 +1544,12 @@ namespace Ogre {
 
         if (enabled)
         {
-            if (tex)
-            {
-                // note used
-                tex->touch();
-                mTextureTypes[stage] = tex->getGLTextureTarget();
-            }
-            else
-                // assume 2D
-                mTextureTypes[stage] = GL_TEXTURE_2D;
+            GLTexturePtr tex = static_pointer_cast<GLTexture>(
+                texPtr ? texPtr : mTextureManager->_getWarningTexture());
+
+            // note used
+            tex->touch();
+            mTextureTypes[stage] = tex->getGLTextureTarget();
 
             if(lastTextureType != mTextureTypes[stage] && lastTextureType != 0)
             {
@@ -1549,10 +1566,7 @@ namespace Ogre {
                     glEnable( mTextureTypes[stage] );
             }
 
-            if(tex)
-                mStateCacheManager->bindGLTexture( mTextureTypes[stage], tex->getGLID() );
-            else
-                mStateCacheManager->bindGLTexture( mTextureTypes[stage], static_cast<GLTextureManager*>(mTextureManager)->getWarningTextureID() );
+            mStateCacheManager->bindGLTexture( mTextureTypes[stage], tex->getGLID() );
         }
         else
         {
@@ -1965,22 +1979,18 @@ namespace Ogre {
     //-----------------------------------------------------------------------------
     void GLRenderSystem::_setAlphaRejectSettings(CompareFunction func, unsigned char value, bool alphaToCoverage)
     {
-        bool a2c = false;
-        static bool lasta2c = false;
         bool enable = func != CMPF_ALWAYS_PASS;
 
         mStateCacheManager->setEnabled(GL_ALPHA_TEST, enable);
 
         if(enable)
         {
-            a2c = alphaToCoverage;
             glAlphaFunc(convertCompareFunction(func), value / 255.0f);
         }
 
-        if (a2c != lasta2c && getCapabilities()->hasCapability(RSC_ALPHA_TO_COVERAGE))
+        if (getCapabilities()->hasCapability(RSC_ALPHA_TO_COVERAGE))
         {
-            mStateCacheManager->setEnabled(GL_SAMPLE_ALPHA_TO_COVERAGE, a2c);
-            lasta2c = a2c;
+            mStateCacheManager->setEnabled(GL_SAMPLE_ALPHA_TO_COVERAGE, alphaToCoverage && enable);
         }
 
     }
@@ -2444,14 +2454,6 @@ namespace Ogre {
         //TODO: implement (opengl 3 only?)
     }
     //---------------------------------------------------------------------
-    GLfloat GLRenderSystem::_getCurrentAnisotropy(size_t unit)
-    {
-        GLfloat curAniso = 0;
-        glGetTexParameterfv(mTextureTypes[unit],
-                            GL_TEXTURE_MAX_ANISOTROPY_EXT, &curAniso);
-        return curAniso ? curAniso : 1;
-    }
-    //---------------------------------------------------------------------
     void GLRenderSystem::_setTextureLayerAnisotropy(size_t unit, unsigned int maxAnisotropy)
     {
         if (!mCurrentCapabilities->hasCapability(RSC_ANISOTROPY))
@@ -2460,13 +2462,11 @@ namespace Ogre {
         if (!mStateCacheManager->activateGLTextureUnit(unit))
             return;
 
-        GLfloat largest_supported_anisotropy = 0;
-        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &largest_supported_anisotropy);
+        Real largest_supported_anisotropy = mCurrentCapabilities->getMaxSupportedAnisotropy();
         if (maxAnisotropy > largest_supported_anisotropy)
             maxAnisotropy = largest_supported_anisotropy ?
                 static_cast<uint>(largest_supported_anisotropy) : 1;
-        if (_getCurrentAnisotropy(unit) != maxAnisotropy)
-            glTexParameterf(mTextureTypes[unit], GL_TEXTURE_MAX_ANISOTROPY_EXT, maxAnisotropy);
+        glTexParameterf(mTextureTypes[unit], GL_TEXTURE_MAX_ANISOTROPY_EXT, maxAnisotropy);
 
         mStateCacheManager->activateGLTextureUnit(0);
     }
@@ -2722,32 +2722,12 @@ namespace Ogre {
         }
     }
     //---------------------------------------------------------------------
-    void GLRenderSystem::setVertexDeclaration(VertexDeclaration* decl)
-    {
-    }
-    //---------------------------------------------------------------------
-    void GLRenderSystem::setVertexBufferBinding(VertexBufferBinding* binding)
-    {
-    }
-    //---------------------------------------------------------------------
     void GLRenderSystem::_render(const RenderOperation& op)
     {
         // Call super class
         RenderSystem::_render(op);
 
         mMaxBuiltInTextureAttribIndex = 0;
-        if ( ! mEnableFixedPipeline && !mRealCapabilities->hasCapability(RSC_FIXED_FUNCTION)
-             && 
-             (
-                 ( mCurrentVertexProgram == NULL ) ||
-                 ( mCurrentFragmentProgram == NULL && op.operationType != RenderOperation::OT_POINT_LIST) 		  
-             )
-        ) 
-        {
-            OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, 
-                        "Attempted to render using the fixed pipeline when it is disabled.",
-                        "GLRenderSystem::_render");
-        }
 
         HardwareVertexBufferSharedPtr globalInstanceVertexBuffer = getGlobalInstanceVertexBuffer();
         VertexDeclaration* globalVertexDeclaration = getGlobalInstanceVertexBufferVertexDeclaration();
@@ -2766,16 +2746,11 @@ namespace Ogre {
             op.vertexData->vertexDeclaration->getElements();
         VertexDeclaration::VertexElementList::const_iterator elemIter, elemEnd;
         elemEnd = decl.end();
-        size_t maxSource = 0;
 
         for (elemIter = decl.begin(); elemIter != elemEnd; ++elemIter)
         {
             const VertexElement & elem = *elemIter;
             size_t source = elem.getSource();
-            if ( maxSource < source )
-            {
-                maxSource = source;
-            }
 
             if (!op.vertexData->vertexBufferBinding->isBufferBound(source))
                 continue; // skip unbound elements
@@ -2783,8 +2758,7 @@ namespace Ogre {
             HardwareVertexBufferSharedPtr vertexBuffer =
                 op.vertexData->vertexBufferBinding->getBuffer(source);
 
-            bindVertexElementToGpu(elem, vertexBuffer, op.vertexData->vertexStart,
-                                   mRenderAttribsBound, mRenderInstanceAttribsBound);
+            bindVertexElementToGpu(elem, vertexBuffer, op.vertexData->vertexStart);
         }
 
         if( globalInstanceVertexBuffer && globalVertexDeclaration != NULL )
@@ -2793,8 +2767,7 @@ namespace Ogre {
             for (elemIter = globalVertexDeclaration->getElements().begin(); elemIter != elemEnd; ++elemIter)
             {
                 const VertexElement & elem = *elemIter;
-                bindVertexElementToGpu(elem, globalInstanceVertexBuffer, 0,
-                                       mRenderAttribsBound, mRenderInstanceAttribsBound);
+                bindVertexElementToGpu(elem, globalInstanceVertexBuffer, 0);
 
             }
         }
@@ -2845,9 +2818,11 @@ namespace Ogre {
             }
             else
             {
-                pBufferData = static_cast<GLDefaultHardwareIndexBuffer*>(
-                    op.indexData->indexBuffer.get())->getDataPtr(
-                        op.indexData->indexStart * op.indexData->indexBuffer->getIndexSize());
+                // DefaultHardwareIndexBuffer: fancy way to get data pointer
+                pBufferData = op.indexData->indexBuffer->lock(
+                    op.indexData->indexStart * op.indexData->indexBuffer->getIndexSize(), 0,
+                    HardwareBuffer::HBL_NORMAL);
+                op.indexData->indexBuffer->unlock();
             }
 
             GLenum indexType = (op.indexData->indexBuffer->getType() == HardwareIndexBuffer::IT_16BIT) ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
@@ -3308,51 +3283,6 @@ namespace Ogre {
             // Enable seamless cube maps
             glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 		}
-
-        static_cast<GLTextureManager*>(mTextureManager)->createWarningTexture();
-    }
-
-    void GLRenderSystem::switchContextCache(GLContext* id)
-    {
-        CachesMap::iterator it = mCaches.find(id);
-        if (it != mCaches.end())
-        {
-            // Already have a cache for this context
-            mStateCacheManager = &it->second;
-        }
-        else
-        {
-            // No cache for this context yet
-            mStateCacheManager = &mCaches[id];
-            mStateCacheManager->initializeCache();
-        }
-
-        mGLSupport->setStateCacheManager(mStateCacheManager);
-    }
-
-    void GLRenderSystem::unregisterContextCache(GLContext* id)
-    {
-        CachesMap::iterator it = mCaches.find(id);
-        if (it != mCaches.end())
-        {
-            if (mStateCacheManager == &it->second)
-                mStateCacheManager = NULL;
-            mCaches.erase(it);
-        }
-
-        // Always keep a valid cache, even if no contexts are left.
-        // This is needed due to the way GLRenderSystem::shutdown works -
-        // HardwareBufferManager destructor may call deleteGLBuffer even after all contexts
-        // have been deleted
-        if (!mStateCacheManager)
-        {
-            // Therefore we add a "dummy" cache if none are left
-            if (mCaches.empty())
-                mCaches[0];
-            mStateCacheManager = &mCaches.begin()->second;
-        }
-
-        mGLSupport->setStateCacheManager(mStateCacheManager);
     }
 
     //---------------------------------------------------------------------
@@ -3380,12 +3310,18 @@ namespace Ogre {
         _disableTextureUnitsFrom(0);
 
         // It's ready for switching
-        if (mCurrentContext)
+        if (mCurrentContext!=context)
+        {
+#if OGRE_PLATFORM == OGRE_PLATFORM_APPLE
+            // NSGLContext::makeCurrentContext does not flush automatically. everybody else does.
+            glFlushRenderAPPLE();
+#endif
             mCurrentContext->endCurrent();
-        mCurrentContext = context;
+            mCurrentContext = context;
+        }
         mCurrentContext->setCurrent();
 
-        switchContextCache(mCurrentContext);
+        mStateCacheManager = mCurrentContext->createOrRetrieveStateCacheManager<GLStateCacheManager>();
 
         // Check if the context has already done one-time initialisation
         if(!mCurrentContext->getInitialized())
@@ -3466,9 +3402,9 @@ namespace Ogre {
                 mCurrentContext->endCurrent();
                 mCurrentContext = 0;
                 mMainContext = 0;
+                mStateCacheManager = 0;
             }
         }
-        unregisterContextCache(context);
     }
     //---------------------------------------------------------------------
     void GLRenderSystem::registerThread()
@@ -3552,10 +3488,9 @@ namespace Ogre {
     }
 
     //---------------------------------------------------------------------
-    void GLRenderSystem::bindVertexElementToGpu( const VertexElement &elem,
-                                                 HardwareVertexBufferSharedPtr vertexBuffer, const size_t vertexStart,
-                                                 vector<GLuint>::type &attribsBound,
-                                                 vector<GLuint>::type &instanceAttribsBound )
+    void GLRenderSystem::bindVertexElementToGpu(const VertexElement& elem,
+                                                const HardwareVertexBufferSharedPtr& vertexBuffer,
+                                                const size_t vertexStart)
     {
         void* pBufferData = 0;
         const GLHardwareVertexBuffer* hwGlBuffer = static_cast<const GLHardwareVertexBuffer*>(vertexBuffer.get());
@@ -3568,7 +3503,9 @@ namespace Ogre {
         }
         else
         {
-            pBufferData = static_cast<const GLDefaultHardwareVertexBuffer*>(vertexBuffer.get())->getDataPtr(elem.getOffset());
+            // DefaultHardwareVertexBuffer: fancy way to get data pointer
+            pBufferData = vertexBuffer->lock(elem.getOffset(), 0, HardwareBuffer::HBL_NORMAL);
+            vertexBuffer->unlock();
         }
         if (vertexStart)
         {
@@ -3585,9 +3522,9 @@ namespace Ogre {
 
             if (hwGlBuffer->getIsInstanceData())
             {
-                GLint attrib = mCurrentVertexProgram->getAttributeIndex(sem, elem.getIndex());
+                GLint attrib = GLSLProgramCommon::getFixedAttributeIndex(sem, elem.getIndex());
                 glVertexAttribDivisorARB(attrib, hwGlBuffer->getInstanceDataStepRate() );
-                instanceAttribsBound.push_back(attrib);
+                mRenderInstanceAttribsBound.push_back(attrib);
             }
         }
 
@@ -3597,7 +3534,7 @@ namespace Ogre {
         // builtins may be done this way too
         if (isCustomAttrib)
         {
-            GLint attrib = mCurrentVertexProgram->getAttributeIndex(sem, elem.getIndex());
+            GLint attrib = GLSLProgramCommon::getFixedAttributeIndex(sem, elem.getIndex());
             unsigned short typeCount = VertexElement::getTypeCount(elem.getType());
             GLboolean normalised = GL_FALSE;
             switch(elem.getType())
@@ -3609,6 +3546,13 @@ namespace Ogre {
                 // VertexElement::getTypeCount treats them as 1 (RGBA)
                 // Also need to normalise the fixed-point data
                 typeCount = 4;
+                normalised = GL_TRUE;
+                break;
+            case VET_UBYTE4_NORM:
+            case VET_SHORT2_NORM:
+            case VET_USHORT2_NORM:
+            case VET_SHORT4_NORM:
+            case VET_USHORT4_NORM:
                 normalised = GL_TRUE;
                 break;
             default:
@@ -3624,7 +3568,7 @@ namespace Ogre {
                 pBufferData);
             glEnableVertexAttribArrayARB(attrib);
 
-            attribsBound.push_back(attrib);
+            mRenderAttribsBound.push_back(attrib);
         }
         else
         {

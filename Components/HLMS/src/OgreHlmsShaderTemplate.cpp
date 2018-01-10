@@ -32,16 +32,6 @@ THE SOFTWARE.
 namespace Ogre
 {
 	//-----------------------------------------------------------------------------------
-	ShaderTemplate::ShaderTemplate() : mHash(0)
-	{
-
-	}
-	//-----------------------------------------------------------------------------------
-	ShaderTemplate::~ShaderTemplate()
-	{
-
-	}
-	//-----------------------------------------------------------------------------------
 	void ShaderTemplate::setTemplateFileName(const String& templateFileName)
 	{
 		mTemplateFileName = templateFileName;
@@ -70,14 +60,12 @@ namespace Ogre
 	//-----------------------------------------------------------------------------------
 	void ShaderTemplate::load()
 	{
-		if (mTemplateFileName.empty()) return;
+        if (mTemplateFileName.empty()) return;
 
-		if (ResourceGroupManager::getSingletonPtr()->resourceExists(ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME, mTemplateFileName))
-		{
-			DataStreamPtr logoCornersFile = ResourceGroupManager::getSingletonPtr()->openResource(mTemplateFileName);
-			mTemplate = logoCornersFile->getAsString();
-			mHash = calcHash(mTemplate);
-		}
+		DataStreamPtr logoCornersFile = ResourceGroupManager::getSingletonPtr()->openResource(mTemplateFileName);
+
+        mTemplate = logoCornersFile->getAsString();
+        mHash = calcHash(mTemplate);
 	}
 	//-----------------------------------------------------------------------------------
 }

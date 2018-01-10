@@ -17,11 +17,11 @@ file(GLOB NVPARSE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/nvparse/*.cpp")
 file(GLOB NVPARSE_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/src/nvparse/*.h")
 
 if(UNIX)
-  # easier than porting to new flex
-  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/nvparse/_ps1.0_lexer.cpp 
-    PROPERTIES COMPILE_FLAGS "-Wno-shadow -Wno-cast-qual -Wno-unused-function")
-  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/nvparse/_vs1.0_lexer.cpp 
-    PROPERTIES COMPILE_FLAGS "-Wno-cast-qual -Wno-unused-function")
+  # easier than porting to new flex  
+  foreach(NVSRC ${NVPARSE_SOURCE})
+    set_source_files_properties(${NVSRC} 
+      PROPERTIES COMPILE_FLAGS "-Wno-unused-function -Wno-shadow -Wno-cast-qual -Wno-missing-declarations -Wno-undef")
+  endforeach()
 endif()
 
 # Remove test app file
@@ -37,17 +37,9 @@ source_group(NVparse FILES ${NVPARSE_SOURCE} ${NVPARSE_HEADERS})
 source_group(ATIFS FILES ${ATIFS_SOURCE} ${ATIFS_HEADERS})
 source_group(GLSL FILES ${GLSL_SOURCE} ${GLSL_HEADERS})
 
-include_directories(src/StateCacheManager)
 if(OGRE_CONFIG_ENABLE_GL_STATE_CACHE_SUPPORT)
-  list(APPEND SOURCE_FILES
-      src/StateCacheManager/OgreGLStateCacheManagerImp.cpp
-      src/StateCacheManager/OgreGLUniformCacheImp.cpp
-  )
-else()
-  list(APPEND SOURCE_FILES
-      src/StateCacheManager/OgreGLNullStateCacheManagerImp.cpp
-      src/StateCacheManager/OgreGLNullUniformCacheImp.cpp
-  )
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/OgreGLStateCacheManager.cpp 
+    PROPERTIES COMPILE_DEFINITIONS OGRE_ENABLE_STATE_CACHE)
 endif()
 
 list(APPEND HEADER_FILES
@@ -73,11 +65,11 @@ if(NOT APPLE)
   )
 endif()
 
-add_definitions(-DGLEW_STATIC)
+add_definitions(-DGLEW_STATIC -DYY_NEVER_INTERACTIVE)
 #Note that in the next row SOURCE_FILES are added last. This is to prevent compilation problems of unity build found on Windows Visual Studio. 
 #In this situation any file added after the "glew.cpp" file, which belongs to the SOURCE_FILES package, does not compile
 ogre_add_library_to_folder(RenderSystems RenderSystem_GL ${OGRE_LIB_TYPE} ${HEADER_FILES} ${GLSL_SOURCE} ${ATIFS_SOURCE} ${NVPARSE_SOURCE} ${SOURCE_FILES})
-target_link_libraries(RenderSystem_GL OgreMain ${OPENGL_LIBRARIES} ${GLSUPPORT_LIBS})
+target_link_libraries(RenderSystem_GL OgreMain ${GLSUPPORT_LIBS} ${OPENGL_LIBRARIES})
 
 if (NOT OGRE_STATIC)
   set_target_properties(RenderSystem_GL PROPERTIES

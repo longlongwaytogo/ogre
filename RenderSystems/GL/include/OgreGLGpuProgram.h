@@ -56,18 +56,9 @@ namespace Ogre {
         /// @copydoc Resource::calculateSize
         virtual size_t calculateSize(void) const;
 
-        /** Get the attribute index for a given semantic. 
-        @remarks
-            This can be used to identify the attribute index to bind non-builtin
-            attributes like tangent and binormal.
-        */
-        virtual GLuint getAttributeIndex(VertexElementSemantic semantic, uint index);
         /** Test whether attribute index for a given semantic is valid. 
         */
         virtual bool isAttributeValid(VertexElementSemantic semantic, uint index);
-
-        /** Get the fixed attribute bindings normally used by GL for a semantic. */
-        static GLuint getFixedAttributeIndex(VertexElementSemantic semantic, uint index);
 
     protected:
         /** Overridden from GpuProgram, do nothing */
@@ -76,7 +67,6 @@ namespace Ogre {
         void unloadImpl(void) {}
 
         GLuint mProgramID;
-        GLenum mProgramType;
     };
 
     /** Specialisation of the GL low-level program for ARB programs. */
@@ -86,10 +76,6 @@ namespace Ogre {
         GLArbGpuProgram(ResourceManager* creator, const String& name, ResourceHandle handle,
             const String& group, bool isManual = false, ManualResourceLoader* loader = 0);
         virtual ~GLArbGpuProgram();
-
-        /// @copydoc GpuProgram::setType
-        void setType(GpuProgramType t);
-
 
         /// Execute the binding functions for this program
         void bindProgram(void);
@@ -101,8 +87,7 @@ namespace Ogre {
         void bindProgramPassIterationParameters(GpuProgramParametersSharedPtr params);
 
         /// Get the GL type for the program
-        GLuint getProgramType(void) const
-        { return mProgramType; }
+        GLenum getProgramType(void) const;
 
     protected:
         void loadFromSource(void);

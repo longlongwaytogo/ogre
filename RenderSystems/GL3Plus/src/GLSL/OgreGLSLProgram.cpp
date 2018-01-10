@@ -31,6 +31,7 @@
 #include "OgreGpuProgramManager.h"
 #include "OgreGLSLShader.h"
 #include "OgreRoot.h"
+#include "OgreGLSLExtSupport.h"
 
 namespace Ogre {
 
@@ -46,19 +47,8 @@ namespace Ogre {
         , mGeometryShader(geometryShader)
         , mFragmentShader(fragmentShader)
         , mComputeShader(computeShader)
-        , mVertexArrayObject(0)
     {
     }
-
-
-    GLSLProgram::~GLSLProgram(void)
-    {
-        OGRE_CHECK_GL_ERROR(glDeleteProgram(mGLProgramHandle));
-
-        delete mVertexArrayObject;
-        mVertexArrayObject = 0;
-    }
-
 
     Ogre::String GLSLProgram::getCombinedName()
     {
@@ -103,33 +93,77 @@ namespace Ogre {
         return name;
     }
 
-    GLint GLSLProgram::getAttributeIndex(VertexElementSemantic semantic, uint index)
+    void GLSLProgram::bindFixedAttributes(GLuint program)
     {
-        GLint res = mCustomAttributesIndexes[semantic-1][index];
-        if (res == NULL_CUSTOM_ATTRIBUTES_INDEX)
+        GLint maxAttribs = Root::getSingleton().getRenderSystem()->getCapabilities()->getNumVertexAttributes();
+
+        size_t numAttribs = sizeof(msCustomAttributes) / sizeof(CustomAttribute);
+        for (size_t i = 0; i < numAttribs; ++i)
         {
-            const char * attString = getAttributeSemanticString(semantic);
-            GLint attrib;
-            OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(mGLProgramHandle, attString));
-
-            // Sadly position is a special case.
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX && semantic == VES_POSITION)
+            const CustomAttribute& a = msCustomAttributes[i];
+            if (a.attrib < maxAttribs)
             {
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(mGLProgramHandle, "position"));
-            }
 
-            // For uv and other case the index is a part of the name.
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX)
-            {
-                String attStringWithSemantic = String(attString) + StringConverter::toString(index);
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(mGLProgramHandle, attStringWithSemantic.c_str()));
+                OGRE_CHECK_GL_ERROR(glBindAttribLocation(program, a.attrib, a.name));
             }
-
-            // Update mCustomAttributesIndexes with the index we found (or didn't find).
-            mCustomAttributesIndexes[semantic-1][index] = attrib;
-            res = attrib;
         }
-        return res;
+    }
+
+    void GLSLProgram::setTransformFeedbackVaryings(const std::vector<String>& nameStrings)
+    {
+        // Get program object ID.
+        GLuint programId;
+        if (Root::getSingleton().getRenderSystem()->getCapabilities()->hasCapability(RSC_SEPARATE_SHADER_OBJECTS))
+        {
+            //TODO include tessellation stages
+            GLSLShader* glslGpuProgram = getGeometryShader();
+            if (!glslGpuProgram)
+                glslGpuProgram = getVertexShader();
+
+            programId = glslGpuProgram->getGLProgramHandle();
+
+            // force re-link
+            GpuProgramManager::getSingleton().removeMicrocodeFromCache(glslGpuProgram->getName());
+            glslGpuProgram->setLinked(false);
+        }
+        else
+        {
+            programId = getGLProgramHandle();
+
+            // force re-link
+            GpuProgramManager::getSingleton().removeMicrocodeFromCache(getCombinedName());
+        }
+        mLinked = false;
+
+        // Convert to const char * for GL
+        std::vector<const char*> names;
+        for (uint e = 0; e < nameStrings.size(); e++)
+        {
+            names.push_back(nameStrings[e].c_str());
+        }
+
+        // TODO replace glTransformFeedbackVaryings with in-shader specification (GL 4.4)
+        OGRE_CHECK_GL_ERROR(glTransformFeedbackVaryings(programId, nameStrings.size(), &names[0],
+                                                        GL_INTERLEAVED_ATTRIBS));
+
+#if OGRE_DEBUG_MODE
+        activate();
+        // Check if varyings were successfully set.
+        GLchar Name[64];
+        GLsizei Length(0);
+        GLsizei Size(0);
+        GLenum Type(0);
+        // bool Validated = false;
+        for (size_t i = 0; i < nameStrings.size(); i++)
+        {
+            OGRE_CHECK_GL_ERROR(
+                glGetTransformFeedbackVarying(programId, i, 64, &Length, &Size, &Type, Name));
+            LogManager::getSingleton().stream() << "Varying " << i << ": " << Name << " " << Length
+                                                << " " << Size << " " << Type;
+            // Validated = (Size == 1) && (Type == GL_FLOAT_VEC3);
+            // std::cout << Validated << " " << GL_FLOAT_VEC3 << std::endl;
+        }
+#endif
     }
 
     void GLSLProgram::getMicrocodeFromCache(void)

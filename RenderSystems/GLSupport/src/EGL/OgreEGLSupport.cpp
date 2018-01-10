@@ -56,9 +56,6 @@ namespace Ogre {
         ConfigOption optDisplayFrequency;
         ConfigOption optFSAA;
         ConfigOption optVSync;
-#if GL_OES_packed_depth_stencil
-        ConfigOption optRTTMode;
-#endif
 
         optFullScreen.name = "Full Screen";
         optFullScreen.immutable = false;
@@ -78,14 +75,6 @@ namespace Ogre {
         optFSAA.name = "FSAA";
         optFSAA.immutable = false;
 
-#if GL_OES_packed_depth_stencil
-        optRTTMode.name = "RTT Preferred Mode";
-        optRTTMode.possibleValues.push_back("FBO");
-        optRTTMode.possibleValues.push_back("Copy");
-        optRTTMode.currentValue = "FBO";
-        optRTTMode.immutable = false;
-        optRTTMode.currentValue = optRTTMode.possibleValues[0];
-#endif
         optFullScreen.possibleValues.push_back("No");
         optFullScreen.possibleValues.push_back("Yes");
 
@@ -117,15 +106,12 @@ namespace Ogre {
             optFSAA.currentValue = optFSAA.possibleValues[0];
         }
 
-
         mOptions[optFullScreen.name] = optFullScreen;
         mOptions[optVideoMode.name] = optVideoMode;
         mOptions[optDisplayFrequency.name] = optDisplayFrequency;
         mOptions[optFSAA.name] = optFSAA;
         mOptions[optVSync.name] = optVSync;
-#if GL_OES_packed_depth_stencil
-        mOptions[optRTTMode.name] = optRTTMode;
-#endif
+
         refreshConfig();
     }
 
@@ -172,12 +158,6 @@ namespace Ogre {
         {
             refreshConfig();
         }
-    }
-
-    String EGLSupport::validateConfig(void)
-    {
-        // TODO
-        return BLANKSTRING;
     }
 
     EGLDisplay EGLSupport::getGLDisplay(void)
@@ -434,55 +414,46 @@ namespace Ogre {
                           mOriginalMode.first.second, mOriginalMode.second);
     }
 
-    RenderWindow* EGLSupport::createWindow(bool autoCreateWindow,
-                                           RenderSystem* renderSystem,
-                                           const String& windowTitle)
+    NameValuePairList EGLSupport::parseOptions(uint& w, uint& h, bool& fullscreen)
     {
-        RenderWindow *window = 0;
+        ConfigOptionMap::iterator opt;
+        ConfigOptionMap::iterator end = mOptions.end();
+        NameValuePairList miscParams;
 
-        if (autoCreateWindow)
+        fullscreen = false;
+        w = 640, h = 480;
+
+        if ((opt = mOptions.find("Full Screen")) != end)
         {
-            ConfigOptionMap::iterator opt;
-            ConfigOptionMap::iterator end = mOptions.end();
-            NameValuePairList miscParams;
-
-            bool fullscreen = false;
-            uint w = 640, h = 480;
-
-            if ((opt = mOptions.find("Full Screen")) != end)
-            {
-                fullscreen = (opt->second.currentValue == "Yes");
-            }
-
-            if ((opt = mOptions.find("Display Frequency")) != end)
-            {
-                miscParams["displayFrequency"] = opt->second.currentValue;
-            }
-
-            if ((opt = mOptions.find("Video Mode")) != end)
-            {
-                String val = opt->second.currentValue;
-                String::size_type pos = val.find('x');
-
-                if (pos != String::npos)
-                {
-                    w = StringConverter::parseUnsignedInt(val.substr(0, pos));
-                    h = StringConverter::parseUnsignedInt(val.substr(pos + 1));
-                }
-            }
-
-            if ((opt = mOptions.find("FSAA")) != end)
-            {
-                miscParams["FSAA"] = opt->second.currentValue;
-            }
-
-            if((opt = mOptions.find("VSync")) != end)
-                miscParams["vsync"] = opt->second.currentValue;
-
-            window = renderSystem->_createRenderWindow(windowTitle, w, h, fullscreen, &miscParams);
+            fullscreen = (opt->second.currentValue == "Yes");
         }
 
-        return window;
+        if ((opt = mOptions.find("Display Frequency")) != end)
+        {
+            miscParams["displayFrequency"] = opt->second.currentValue;
+        }
+
+        if ((opt = mOptions.find("Video Mode")) != end)
+        {
+            String val = opt->second.currentValue;
+            String::size_type pos = val.find('x');
+
+            if (pos != String::npos)
+            {
+                w = StringConverter::parseUnsignedInt(val.substr(0, pos));
+                h = StringConverter::parseUnsignedInt(val.substr(pos + 1));
+            }
+        }
+
+        if ((opt = mOptions.find("FSAA")) != end)
+        {
+            miscParams["FSAA"] = opt->second.currentValue;
+        }
+
+        if((opt = mOptions.find("VSync")) != end)
+            miscParams["vsync"] = opt->second.currentValue;
+
+        return miscParams;
     }
 
     ::EGLContext EGLSupport::createNewContext(EGLDisplay eglDisplay,
@@ -490,7 +461,7 @@ namespace Ogre {
                                               ::EGLContext shareList) const 
     {
         EGLint contextAttrs[] = {
-            EGL_CONTEXT_CLIENT_VERSION, OGRE_NO_GLES3_SUPPORT ? 2 : 3,
+            EGL_CONTEXT_CLIENT_VERSION, (OGRE_NO_GLES3_SUPPORT || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN) ? 2 : 3,
             EGL_NONE
         };
 

@@ -35,10 +35,9 @@ using namespace OgreBites;
 #define PLANE_SIZE 3000.0f
 #define CIRCLES_MATERIAL "Examples/Water/Circles"
 
-void prepareCircleMaterial()
+static void prepareCircleMaterial()
 {
-    char *bmap = new char[256 * 256 * 4] ;
-    memset(bmap, 127, 256 * 256 * 4);
+    vector<uchar>::type bmap(256 * 256 * 4, 127);
     for(int b=0;b<16;b++) {
         int x0 = b % 4 ;
         int y0 = b >> 2 ;
@@ -61,10 +60,11 @@ void prepareCircleMaterial()
         }
     }
     
-    DataStreamPtr imgstream(new MemoryDataStream(bmap, 256 * 256 * 4));
     //~ Image img;
     //~ img.loadRawData( imgstream, 256, 256, PF_A8R8G8B8 );
     //~ TextureManager::getSingleton().loadImage( CIRCLES_MATERIAL , img );
+
+    DataStreamPtr imgstream(new MemoryDataStream(&bmap[0], bmap.size()));
     TextureManager::getSingleton().loadRawData(CIRCLES_MATERIAL,
                                                ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
                                                imgstream, 256, 256, PF_A8R8G8B8);
@@ -76,8 +76,6 @@ void prepareCircleMaterial()
     material->setSceneBlending( SBT_ADD );
     material->setDepthWriteEnabled( false ) ;
     material->load();
-    // finished with bmap so release the memory
-    delete [] bmap;
 }
 
 
@@ -221,7 +219,7 @@ public:
     {
         MeshManager::getSingleton().remove(mesh->getHandle());
         sceneMgr->destroyEntity(entity->getName());
-        static_cast<SceneNode*> (sceneMgr->getRootSceneNode())->removeChild(node->getName());
+        static_cast<SceneNode*> (sceneMgr->getRootSceneNode())->removeChild(node);
     }
     void animate(Real timeSinceLastFrame)
     {
@@ -296,11 +294,8 @@ protected:
         mSceneMgr->setAmbientLight(ColourValue(0.75, 0.75, 0.75));
         
         // Create a light
-        Light* l = mSceneMgr->createLight("MainLight");
         // Accept default settings: point light, white diffuse, just set position
-        // NB I could attach the light to a SceneNode if I wanted it to move automatically with
-        //  other objects, but I don't
-        l->setPosition(200,300,100);
+        Light* l = mSceneMgr->createLight("MainLight");
         
         // Create water mesh and entity
         waterMesh = new WaterMesh(MESH_NAME, PLANE_SIZE, COMPLEXITY);
@@ -319,13 +314,12 @@ protected:
         //~ mCamera->setAutoTracking(true, headNode);
         
         // Create the camera node, set its position & attach camera
-        SceneNode* camNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
-        camNode->translate(0, 500, PLANE_SIZE);
-        camNode->yaw(Degree(-45));
-        camNode->attachObject(mCamera);
+        mCameraNode->translate(0, 500, PLANE_SIZE);
+        mCameraNode->yaw(Degree(-45));
         
         // Create light node
         SceneNode* lightNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
+        lightNode->setPosition(200,300,100);
         lightNode->attachObject(l);
         
         // set up spline animation of light node

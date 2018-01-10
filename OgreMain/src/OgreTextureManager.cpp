@@ -85,7 +85,7 @@ namespace Ogre {
             TexturePtr tex = static_pointer_cast<Texture>(res.first);
             tex->setTextureType(texType);
             tex->setNumMipmaps((numMipmaps == MIP_DEFAULT)? mDefaultNumMipmaps :
-                static_cast<size_t>(numMipmaps));
+                static_cast<uint32>(numMipmaps));
             tex->setGamma(gamma);
             tex->setTreatLuminanceAsAlpha(isAlpha);
             tex->setFormat(desiredFormat);
@@ -125,7 +125,7 @@ namespace Ogre {
 
         tex->setTextureType(texType);
         tex->setNumMipmaps((numMipmaps == MIP_DEFAULT)? mDefaultNumMipmaps :
-            static_cast<size_t>(numMipmaps));
+            static_cast<uint32>(numMipmaps));
         tex->setGamma(gamma);
         tex->setTreatLuminanceAsAlpha(isAlpha);
         tex->setFormat(desiredFormat);
@@ -144,7 +144,7 @@ namespace Ogre {
 
         tex->setTextureType(texType);
         tex->setNumMipmaps((numMipmaps == MIP_DEFAULT)? mDefaultNumMipmaps :
-            static_cast<size_t>(numMipmaps));
+            static_cast<uint32>(numMipmaps));
         tex->setGamma(gamma);
         tex->setHardwareGammaEnabled(hwGamma);
         tex->loadRawData(stream, uWidth, uHeight, format);
@@ -177,7 +177,7 @@ namespace Ogre {
         ret->setHeight(height);
         ret->setDepth(depth);
         ret->setNumMipmaps((numMipmaps == MIP_DEFAULT)? mDefaultNumMipmaps :
-            static_cast<size_t>(numMipmaps));
+            static_cast<uint32>(numMipmaps));
         ret->setFormat(format);
         ret->setUsage(usage);
         ret->setHardwareGammaEnabled(hwGamma);
@@ -272,7 +272,7 @@ namespace Ogre {
         }
     }
     //-----------------------------------------------------------------------
-    void TextureManager::setDefaultNumMipmaps( size_t num )
+    void TextureManager::setDefaultNumMipmaps( uint32 num )
     {
         mDefaultNumMipmaps = num;
     }
@@ -289,5 +289,31 @@ namespace Ogre {
         // Assume that same or greater number of bits means quality not degraded
         return PixelUtil::getNumElemBits(supportedFormat) >= PixelUtil::getNumElemBits(format);
         
+    }
+
+    const TexturePtr& TextureManager::_getWarningTexture()
+    {
+        if(mWarningTexture)
+            return mWarningTexture;
+
+        // Generate warning texture
+        PixelBox pixels(8, 8, 1, PF_R5G6B5);
+        DataStreamPtr data(new MemoryDataStream(pixels.getConsecutiveSize()));
+        pixels.data = static_pointer_cast<MemoryDataStream>(data)->getPtr();
+
+        // Yellow/black stripes
+        const ColourValue black(0, 0, 0), yellow(1, 1, 0);
+        for (size_t y = 0; y < pixels.getHeight(); ++y)
+        {
+            for (size_t x = 0; x < pixels.getWidth(); ++x)
+            {
+                pixels.setColourAt((((x + y) % 8) < 4) ? black : yellow, x, y, 0);
+            }
+        }
+
+        mWarningTexture = loadRawData("Warning", ResourceGroupManager::INTERNAL_RESOURCE_GROUP_NAME,
+                                      data, pixels.getWidth(), pixels.getHeight(), pixels.format);
+
+        return mWarningTexture;
     }
 }

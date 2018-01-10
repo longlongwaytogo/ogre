@@ -34,8 +34,7 @@
 
 namespace Ogre
 {
-    class GLSLMonolithicProgramManager;
-    class GLSLSeparableProgramManager;
+    class GLSLProgramManager;
 
     /** Factory class for GLSL shaders.
      */
@@ -45,7 +44,7 @@ namespace Ogre
         static String mLanguageName;
 
     public:
-        GLSLShaderFactory(const GL3PlusSupport& support);
+        GLSLShaderFactory(GL3PlusRenderSystem* renderSystem);
         ~GLSLShaderFactory(void);
         /// Get the name of the language this factory creates shaders for.
         const String& getLanguage(void) const;
@@ -56,8 +55,7 @@ namespace Ogre
         void destroy(HighLevelGpuProgram* prog);
 
     private:
-        static GLSLMonolithicProgramManager* mMonolithicProgramManager;
-        static GLSLSeparableProgramManager* mSeparableProgramManager;
+        static GLSLProgramManager* mProgramManager;
     };
 }
 

@@ -29,6 +29,7 @@ THE SOFTWARE.
 #define __Common_H__
 // Common stuff
 
+#include "OgreHeaderPrefix.h"
 #include "OgreMurmurHash3.h"
 
 namespace Ogre {
@@ -43,7 +44,7 @@ namespace Ogre {
     */
 
     /// Fast general hashing algorithm
-    inline uint32 FastHash (const char * data, int len, uint32 hashSoFar = 0) {
+    inline uint32 FastHash (const char * data, size_t len, uint32 hashSoFar = 0) {
         uint32 ret;
         MurmurHash3_x86_32(data, len, hashSoFar, &ret);
         return ret;
@@ -210,7 +211,7 @@ namespace Ogre {
             than the additive stencil shadow approach when there are multiple
             lights, but is not an accurate model. 
         */
-        SHADOWTYPE_STENCIL_MODULATIVE = 0x12,
+        SHADOWTYPE_STENCIL_MODULATIVE = SHADOWDETAILTYPE_STENCIL | SHADOWDETAILTYPE_MODULATIVE,
         /** Stencil shadow technique which renders each light as a separate
             additive pass to the scene. This technique can be very fillrate
             intensive because it requires at least 2 passes of the entire
@@ -218,12 +219,12 @@ namespace Ogre {
             accurate model than the modulative stencil approach and this is
             especially apparent when using coloured lights or bump mapping.
         */
-        SHADOWTYPE_STENCIL_ADDITIVE = 0x11,
+        SHADOWTYPE_STENCIL_ADDITIVE = SHADOWDETAILTYPE_STENCIL | SHADOWDETAILTYPE_ADDITIVE,
         /** Texture-based shadow technique which involves a monochrome render-to-texture
             of the shadow caster and a projection of that texture onto the 
             shadow receivers as a modulative pass. 
         */
-        SHADOWTYPE_TEXTURE_MODULATIVE = 0x22,
+        SHADOWTYPE_TEXTURE_MODULATIVE = SHADOWDETAILTYPE_TEXTURE | SHADOWDETAILTYPE_MODULATIVE,
         
         /** Texture-based shadow technique which involves a render-to-texture
             of the shadow caster and a projection of that texture onto the 
@@ -233,7 +234,7 @@ namespace Ogre {
             modulative approach and this is especially apparent when using coloured lights 
             or bump mapping.
         */
-        SHADOWTYPE_TEXTURE_ADDITIVE = 0x21,
+        SHADOWTYPE_TEXTURE_ADDITIVE = SHADOWDETAILTYPE_TEXTURE | SHADOWDETAILTYPE_ADDITIVE,
 
         /** Texture-based shadow technique which involves a render-to-texture
         of the shadow caster and a projection of that texture on to the shadow
@@ -250,7 +251,7 @@ namespace Ogre {
         not mean it does the adding on your receivers automatically though, how you
         use that result is up to you.
         */
-        SHADOWTYPE_TEXTURE_ADDITIVE_INTEGRATED = 0x25,
+        SHADOWTYPE_TEXTURE_ADDITIVE_INTEGRATED = SHADOWTYPE_TEXTURE_ADDITIVE | SHADOWDETAILTYPE_INTEGRATED,
         /** Texture-based shadow technique which involves a render-to-texture
             of the shadow caster and a projection of that texture on to the shadow
             receivers, with the usage of those shadow textures completely controlled
@@ -266,7 +267,7 @@ namespace Ogre {
             not mean it modulates on your receivers automatically though, how you
             use that result is up to you.
         */
-        SHADOWTYPE_TEXTURE_MODULATIVE_INTEGRATED = 0x26
+        SHADOWTYPE_TEXTURE_MODULATIVE_INTEGRATED = SHADOWTYPE_TEXTURE_MODULATIVE | SHADOWDETAILTYPE_INTEGRATED
     };
 
     /** An enumeration describing which material properties should track the vertex colours */
@@ -344,7 +345,7 @@ namespace Ogre {
     class HashedVector
     {
     public:
-        typedef std::vector<T, STLAllocator<T, GeneralAllocPolicy> > VectorImpl;
+        typedef typename vector<T>::type VectorImpl;
     protected:
         VectorImpl mList;
         mutable uint32 mListHash;
@@ -667,7 +668,7 @@ namespace Ogre {
         typedef TRect< long > Rect;
 
         /** Structure used to define a box in a 3-D integer space.
-            Note that the left, top, and front edges are included but the right, 
+            Note that the left, top, and front edges are included but the right,
             bottom and back ones are not.
          */
         struct Box
@@ -684,8 +685,7 @@ namespace Ogre {
                 @param  t   y value of top edge
                 @param  r   x value of right edge
                 @param  b   y value of bottom edge
-                @note Note that the left, top, and front edges are included 
-                    but the right, bottom and back ones are not.
+                @note @copydetails Ogre::Box
             */
             Box( uint32 l, uint32 t, uint32 r, uint32 b ):
                 left(l),
@@ -705,8 +705,7 @@ namespace Ogre {
                 @param  r   x value of right edge
                 @param  b   y value of bottom edge
                 @param  bb  z value of back edge
-                @note Note that the left, top, and front edges are included 
-                    but the right, bottom and back ones are not.
+                @note @copydetails Ogre::Box
             */
             Box( uint32 l, uint32 t, uint32 ff, uint32 r, uint32 b, uint32 bb ):
                 left(l),
@@ -781,5 +780,6 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

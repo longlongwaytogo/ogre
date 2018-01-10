@@ -44,6 +44,23 @@ namespace Ogre
     template<> SharedData* Singleton<SharedData>::msSingleton = 0;
 }
 
+SharedData::SharedData()
+    : iLastFrameTime(0), iRoot(0), iCamera(0), iWindow(0), iSystem(0), iActivate(false),
+      iGlobalActivate(false), mMLAnimState(0), iMainLight(0)
+{
+}
+
+SharedData::~SharedData() {}
+
+SharedData* SharedData::getSingletonPtr(void)
+{
+    return msSingleton;
+}
+SharedData& SharedData::getSingleton(void)
+{
+    assert( msSingleton );  return ( *msSingleton );
+}
+
 using namespace Ogre;
 
 const Ogre::uint8 DeferredShadingSystem::PRE_GBUFFER_RENDER_QUEUE = Ogre::RENDER_QUEUE_1;
@@ -55,7 +72,8 @@ DeferredShadingSystem::DeferredShadingSystem(
     mViewport(vp), mSceneMgr(sm), mCamera(cam)
 {
     sm->setShadowTechnique(SHADOWTYPE_TEXTURE_ADDITIVE);
-    sm->setShadowTextureCasterMaterial("DeferredShading/Shadows/Caster");
+    sm->setShadowTextureCasterMaterial(
+        MaterialManager::getSingleton().getByName("DeferredShading/Shadows/Caster", "General"));
     mSceneMgr->setShadowTextureCount(1);
     mSceneMgr->setShadowFarDistance(150);
     //Use a value of "2" to use a different depth buffer pool and avoid sharing this with the Backbuffer's

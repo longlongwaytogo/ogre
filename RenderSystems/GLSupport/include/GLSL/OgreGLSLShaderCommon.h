@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include "OgreGLSupportPrerequisites.h"
 #include "OgreHighLevelGpuProgram.h"
 #include "OgreRenderOperation.h"
+#include "OgreGLUniformCache.h"
 
 namespace Ogre {
     /** Specialisation of HighLevelGpuProgram to provide support for OpenGL
@@ -96,11 +97,6 @@ namespace Ogre {
         /** Attach another GLSL Shader to this one. */
         void attachChildShader(const String& name);
 
-        /** Sets the preprocessor defines use to compile the program. */
-        void setPreprocessorDefines(const String& defines) { mPreprocessorDefines = defines; }
-        /** Sets the preprocessor defines use to compile the program. */
-        const String& getPreprocessorDefines(void) const { return mPreprocessorDefines; }
-
         /** Sets whether matrix packing in column-major order. */ 
         void setColumnMajorMatrices(bool columnMajor) { mColumnMajorMatrices = columnMajor; }
         /** Gets whether matrix packed in column-major order. */
@@ -146,6 +142,9 @@ namespace Ogre {
 
         /// Get the OGRE assigned shader ID.
         uint getShaderID(void) const { return mShaderID; }
+
+        /// Get the uniform cache for this shader
+        GLUniformCache*    getUniformCache(){return &mUniformCache;}
 
         /// Command object for setting macro defines
         class CmdPreprocessorDefines : public ParamCommand
@@ -203,8 +202,6 @@ namespace Ogre {
         int mMaxOutputVertices;
         /// Attached Shader names
         String mAttachedShaderNames;
-        /// Preprocessor options
-        String mPreprocessorDefines;
         /// Container of attached programs
         typedef vector< GLSLShaderCommon* >::type GLSLProgramContainer;
         typedef GLSLProgramContainer::iterator GLSLProgramContainerIterator;
@@ -219,6 +216,9 @@ namespace Ogre {
 
         /// OGRE assigned shader ID.
         uint mShaderID;
+
+        /// Pointer to the uniform cache for this shader
+        GLUniformCache    mUniformCache;
 
         /// Keep track of the number of shaders created.
         static uint mShaderCount;

@@ -40,7 +40,7 @@ namespace Ogre {
     class _OgreGLES2Export GLES2HardwareBufferManagerBase : public HardwareBufferManagerBase
     {
         protected:
-            GLES2Support* mGLSupport;
+            GLES2RenderSystem* mRenderSystem;
             /// Internal method for creates a new vertex declaration, may be overridden by certain rendering APIs
             VertexDeclaration* createVertexDeclarationImpl(void);
             /// Internal method for destroys a vertex declaration, may be overridden by certain rendering APIs
@@ -67,13 +67,11 @@ namespace Ogre {
                                                                HardwareBuffer::Usage usage = HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY_DISCARDABLE,
                                                                bool useShadowBuffer = false, const String& name = "");
 
-            /// Utility function to get the correct GL usage based on HBU's
-            static GLenum getGLUsage(unsigned int usage);
-
             /// Utility function to get the correct GL type based on VET's
             static GLenum getGLType(VertexElementType type);
 
-            GLES2StateCacheManager * getStateCacheManager() { return mGLSupport->getStateCacheManager(); }
+            GLES2StateCacheManager * getStateCacheManager();
+            void notifyContextDestroyed(GLContext* context);
     };
 
     /// GLES2HardwareBufferManagerBase as a Singleton
@@ -90,9 +88,9 @@ namespace Ogre {
             OGRE_DELETE mImpl;
         }
 
-        /// Utility function to get the correct GL usage based on HBU's
-        static GLenum getGLUsage(unsigned int usage) 
-            { return GLES2HardwareBufferManagerBase::getGLUsage(usage); }
+        /// Utility function to notify context depended resources
+        void notifyContextDestroyed(GLContext* context)
+            { static_cast<GLES2HardwareBufferManagerBase*>(mImpl)->notifyContextDestroyed(context); }
 
         /// Utility function to get the correct GL type based on VET's
         static GLenum getGLType(VertexElementType type)

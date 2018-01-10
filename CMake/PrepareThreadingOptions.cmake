@@ -12,8 +12,8 @@
 # build, depending on the dependencies found.
 #######################################################################
 
-set(OGRE_THREAD_DEFAULT_PROVIDER "none")
-set(OGRE_THREAD_TYPE "0")
+set(OGRE_THREAD_DEFAULT_PROVIDER "std")
+set(OGRE_THREAD_TYPE "3")
 
 if (Boost_THREAD_FOUND AND Boost_DATE_TIME_FOUND)
 	set(Boost_THREADING TRUE)
@@ -43,17 +43,18 @@ if (OGRE_CONFIG_THREAD_PROVIDER STREQUAL "std")
 endif ()
 
 set(OGRE_CONFIG_THREADS ${OGRE_THREAD_TYPE} CACHE STRING 
-	"Enable Ogre thread support for background loading. Possible values:
-	0 - Threading off.
-	1 - Full background loading.
-	2 - Background resource preparation."
+	"Enable Ogre thread safety support for multithreading. Possible values:
+	0 - no thread safety. DefaultWorkQueue is not threaded.
+	1 - background resource preparation and loading is thread safe. Threaded DefaultWorkQueue. [DEPRECATED]
+	2 - only background resource preparation is thread safe. Threaded DefaultWorkQueue. [DEPRECATED]
+	3 - no thread safety. Threaded DefaultWorkQueue."
 )
-set_property(CACHE OGRE_CONFIG_THREADS PROPERTY STRINGS 0 1 2)
+set_property(CACHE OGRE_CONFIG_THREADS PROPERTY STRINGS 0 1 2 3)
 set(OGRE_CONFIG_THREAD_PROVIDER ${OGRE_THREAD_DEFAULT_PROVIDER} CACHE STRING
 	"Select the library to use for thread support. Possible values:
-	boost - Boost thread library.
-	poco  - Poco thread library.
-	tbb   - ThreadingBuildingBlocks library.
+	boost - Boost thread library. [DEPRECATED]
+	poco  - Poco thread library. [DEPRECATED]
+	tbb   - ThreadingBuildingBlocks library. [DEPRECATED]
 	std   - STL thread library (requires compiler support)."
 )
 set_property(CACHE OGRE_CONFIG_THREAD_PROVIDER PROPERTY STRINGS boost poco tbb std)

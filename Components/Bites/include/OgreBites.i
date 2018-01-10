@@ -8,6 +8,7 @@
 #include "OgreCameraMan.h"
 #include "OgreTrays.h"
 #include "OgreAdvancedRenderControls.h"
+#include "OgreUnifiedHighLevelGpuProgram.h"
 
 #if OGRE_BITES_HAVE_SDL
 #include "SDL_stdinc.h"
@@ -49,6 +50,29 @@
 %feature("director") OgreBites::ApplicationContext;
 %feature("director") OgreBites::InputListener;
 %include "OgreInput.h"
+
+#ifdef __ANDROID__
+%{
+#include <android/native_window_jni.h>
+#include <android/asset_manager_jni.h>
+
+JNIEnv* OgreJNIGetEnv();
+%}
+
+%ignore OgreBites::ApplicationContext::initApp;
+%ignore OgreBites::ApplicationContext::initAppForAndroid(AAssetManager*, ANativeWindow*);
+%extend OgreBites::ApplicationContext {
+    void initAppForAndroid(jobject assetManager, jobject surface) {
+        OgreAssert(assetManager, "assetManager is NULL");
+        OgreAssert(surface, "surface is NULL");
+
+        AAssetManager* assetMgr = AAssetManager_fromJava(OgreJNIGetEnv(), assetManager);
+        ANativeWindow* nativeWnd = ANativeWindow_fromSurface(OgreJNIGetEnv(), surface);
+        $self->initAppForAndroid(assetMgr, nativeWnd);
+    }
+}
+#endif
+
 %include "OgreApplicationContext.h"
 %include "OgreCameraMan.h"
 %include "OgreWindowEventUtilities.h"
@@ -56,5 +80,6 @@
 %ignore OgreBites::TrayManager::getWidget(TrayLocation, unsigned int);
 %ignore OgreBites::TrayManager::getNumWidgets(TrayLocation);
 %ignore OgreBites::TrayManager::getWidgetIterator;
+%ignore OgreBites::SelectMenu::getItemsCount;
 %include "OgreTrays.h"
 %include "OgreAdvancedRenderControls.h"

@@ -35,6 +35,7 @@ THE SOFTWARE.
 #include "OgreCommon.h"
 #include "OgreStringVector.h"
 #include "OgreScriptLoader.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -179,7 +180,7 @@ namespace Ogre {
         size_t getMemoryBudget(void) const;
 
         /** Gets the current memory usage, in bytes. */
-        size_t getMemoryUsage(void) const { return mMemoryUsage.get(); }
+        size_t getMemoryUsage(void) const { return mMemoryUsage.load(); }
 
         /** Unloads a single resource by name.
         @remarks
@@ -368,12 +369,12 @@ namespace Ogre {
         resourceExists(const String& name, const String& group = ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME)
 #endif
         {
-            return (bool)getResourceByName(name, group);
+            return getResourceByName(name, group).get() != 0;
         }
         /// Returns whether a resource with the given handle exists in this manager
         bool resourceExists(ResourceHandle handle)
         {
-            return (bool)getByHandle(handle);
+            return getByHandle(handle).get() != 0;
         }
 
         /** Notify this manager that a resource which it manages has been 
@@ -593,5 +594,6 @@ namespace Ogre {
 
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

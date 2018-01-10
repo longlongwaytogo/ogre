@@ -58,13 +58,13 @@ namespace Ogre
         assert(!isLocked() && "Cannot lock this buffer, it is already locked!");
         assert(offset == 0 && length == mSizeInBytes && "Cannot lock memory region, most lock box or entire buffer");
         
-        Image::Box myBox(0, 0, 0, mWidth, mHeight, mDepth);
+        Box myBox(0, 0, 0, mWidth, mHeight, mDepth);
         const PixelBox &rv = lock(myBox, options);
         return rv.data;
     }
     
     //-----------------------------------------------------------------------------    
-    const PixelBox& HardwarePixelBuffer::lock(const Image::Box& lockBox, LockOptions options)
+    const PixelBox& HardwarePixelBuffer::lock(const Box& lockBox, LockOptions options)
     {
         if (mUseShadowBuffer)
         {
@@ -105,7 +105,7 @@ namespace Ogre
 
     //-----------------------------------------------------------------------------    
 
-    void HardwarePixelBuffer::blit(const HardwarePixelBufferSharedPtr &src, const Image::Box &srcBox, const Image::Box &dstBox)
+    void HardwarePixelBuffer::blit(const HardwarePixelBufferSharedPtr &src, const Box &srcBox, const Box &dstBox)
     {
         if(isLocked() || src->isLocked())
         {
@@ -156,6 +156,14 @@ namespace Ogre
     //-----------------------------------------------------------------------------    
     void HardwarePixelBuffer::readData(size_t offset, size_t length, void* pDest)
     {
+        // allow easy full buffer reads
+        if (offset == 0 && length == mSizeInBytes)
+        {
+            Box box(0, 0, 0, mWidth, mHeight, mDepth);
+            blitToMemory(box, PixelBox(box, mFormat, pDest));
+            return;
+        }
+
         // TODO
         OGRE_EXCEPT(Exception::ERR_NOT_IMPLEMENTED,
                 "Reading a byte range is not implemented. Use blitToMemory.",
@@ -166,6 +174,15 @@ namespace Ogre
     void HardwarePixelBuffer::writeData(size_t offset, size_t length, const void* pSource,
             bool discardWholeBuffer)
     {
+        // allow easy full buffer updates
+        if (offset == 0 && length == mSizeInBytes)
+        {
+            Box box(0, 0, 0, mWidth, mHeight, mDepth);
+            // we know pSource will not be written to
+            blitFromMemory(PixelBox(box, mFormat, const_cast<void*>(pSource)), box);
+            return;
+        }
+
         // TODO
         OGRE_EXCEPT(Exception::ERR_NOT_IMPLEMENTED,
                 "Writing a byte range is not implemented. Use blitFromMemory.",
@@ -179,14 +196,6 @@ namespace Ogre
                 "Not yet implemented for this rendersystem.",
                 "HardwarePixelBuffer::getRenderTarget");
     }
-
-    //-----------------------------------------------------------------------------    
-    
-    HardwarePixelBufferSharedPtr::HardwarePixelBufferSharedPtr(HardwarePixelBuffer* buf)
-        : SharedPtr<HardwarePixelBuffer>(buf)
-    {
-
-    }   
     //-----------------------------------------------------------------------------    
 
     void HardwarePixelBuffer::_clearSliceRTT(size_t zoffset)

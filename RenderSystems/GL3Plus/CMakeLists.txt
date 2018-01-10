@@ -32,8 +32,12 @@ if(NOT APPLE)
   )
 endif()
 
+if(OGRE_CONFIG_ENABLE_GL_STATE_CACHE_SUPPORT)
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/OgreGL3PlusStateCacheManager.cpp 
+    PROPERTIES COMPILE_DEFINITIONS OGRE_ENABLE_STATE_CACHE)
+endif()
 ogre_add_library_to_folder(RenderSystems RenderSystem_GL3Plus ${OGRE_LIB_TYPE} ${HEADER_FILES} ${GLSL_SOURCE} ${SOURCE_FILES})
-target_link_libraries(RenderSystem_GL3Plus OgreMain ${OPENGL_LIBRARIES} ${GLSUPPORT_LIBS})
+target_link_libraries(RenderSystem_GL3Plus OgreMain ${GLSUPPORT_LIBS} ${OPENGL_LIBRARIES})
 
 if (OGRE_CONFIG_THREADS)
   target_link_libraries(RenderSystem_GL3Plus ${OGRE_THREAD_LIBRARIES})

@@ -45,7 +45,7 @@ namespace Ogre
     *  @{
     */
     /** \defgroup Terrain Terrain
-    *
+    *   Editable %Terrain System with LOD, serialization and \ref Paging support
     *  @{
     */
 
@@ -861,22 +861,26 @@ namespace Ogre
         /** Translate a vector from world space to local terrain space based on the alignment options.
         @param inVec The vector in basis space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getTerrainVector(const Vector3& inVec, Vector3* outVec) const;
         /** Translate a vector from world space to local terrain space based on a specified alignment.
         @param inVec The vector in basis space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getTerrainVectorAlign(const Vector3& inVec, Alignment align, Vector3* outVec) const;
 
         /** Translate a vector from world space to local terrain space based on the alignment options.
         @param x, y, z The vector in basis space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getTerrainVector(Real x, Real y, Real z, Vector3* outVec) const;
         /** Translate a vector from world space to local terrain space based on a specified alignment.
         @param x, y, z The vector in world space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getTerrainVectorAlign(Real x, Real y, Real z, Alignment align, Vector3* outVec) const;
 
@@ -888,17 +892,20 @@ namespace Ogre
         /** Translate a vector into world space based on a specified alignment.
         @param inVec The vector in basis space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getVectorAlign(const Vector3& inVec, Alignment align, Vector3* outVec) const;
 
         /** Translate a vector into world space based on the alignment options.
         @param x, y, z The vector in basis space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getVector(Real x, Real y, Real z, Vector3* outVec) const;
         /** Translate a vector into world space based on a specified alignment.
         @param x, y, z The vector in basis space, where x/y represents the 
         terrain plane and z represents the up vector
+        @param[out] outVec
         */
         void getVectorAlign(Real x, Real y, Real z, Alignment align, Vector3* outVec) const;
 
@@ -1929,7 +1936,7 @@ namespace Ogre
 
     public:
         TerrainGlobalOptions();
-        virtual ~TerrainGlobalOptions() {}
+        ~TerrainGlobalOptions();
 
 
         /** The default size of 'skirts' used to hide terrain cracks
@@ -2106,37 +2113,9 @@ namespace Ogre
          */
         void setUseVertexCompressionWhenAvailable(bool enable) { mUseVertexCompressionWhenAvailable = enable; }
 
-        /** Override standard Singleton retrieval.
-        @remarks
-        Why do we do this? Well, it's because the Singleton
-        implementation is in a .h file, which means it gets compiled
-        into anybody who includes it. This is needed for the
-        Singleton template to work, but we actually only want it
-        compiled into the implementation of the class based on the
-        Singleton, not all of them. If we don't change this, we get
-        link errors when trying to use the Singleton-based class from
-        an outside dll.
-        @par
-        This method just delegates to the template version anyway,
-        but the implementation stays in this single compilation unit,
-        preventing link errors.
-        */
+        /// @copydoc Singleton::getSingleton()
         static TerrainGlobalOptions& getSingleton(void);
-        /** Override standard Singleton retrieval.
-        @remarks
-        Why do we do this? Well, it's because the Singleton
-        implementation is in a .h file, which means it gets compiled
-        into anybody who includes it. This is needed for the
-        Singleton template to work, but we actually only want it
-        compiled into the implementation of the class based on the
-        Singleton, not all of them. If we don't change this, we get
-        link errors when trying to use the Singleton-based class from
-        an outside dll.
-        @par
-        This method just delegates to the template version anyway,
-        but the implementation stays in this single compilation unit,
-        preventing link errors.
-        */
+        /// @copydoc Singleton::getSingleton()
         static TerrainGlobalOptions* getSingletonPtr(void);
 
 

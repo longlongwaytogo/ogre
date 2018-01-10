@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include "OgrePrerequisites.h"
 #include "OgreSharedPtr.h"
 #include <istream>
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -374,7 +375,7 @@ namespace Ogre {
             when the stream is destroyed.
         @param readOnly Whether to make the stream on this memory read-only once created
         */
-        MemoryDataStream(DataStreamPtr& sourceStream, 
+        MemoryDataStream(const DataStreamPtr& sourceStream,
                 bool freeOnClose = true, bool readOnly = false);
 
         /** Create a named stream which pre-buffers the contents of 
@@ -653,6 +654,7 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif
 

@@ -44,6 +44,10 @@
 #    endif
 #endif
 
+#ifndef __OGRE_WINRT_PHONE
+#define __OGRE_WINRT_PHONE 0
+#endif
+
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
 #include <android_native_app_glue.h>
@@ -90,6 +94,7 @@
 #   include "Lighting.h"
 #   include "MeshLod.h"
 #   include "ParticleFX.h"
+#   include "PBR.h"
 #   include "PNTrianglesTessellation.h"
 #   include "Shadows.h"
 #   include "SkeletalAnimation.h"
@@ -145,7 +150,7 @@ namespace OgreBites
     public:
 
     SampleBrowser(bool nograb = false, int startSampleIndex = -1)
-    : SampleContext("OGRE Sample Browser", !nograb)
+    : SampleContext("OGRE Sample Browser"), mGrabInput(!nograb)
         {
             mIsShuttingDown = false;
             mTrayMgr = 0;
@@ -207,11 +212,6 @@ namespace OgreBites
         {
             if (mCurrentSample)  // sample quitting
             {
-#ifdef INCLUDE_RTSHADER_SYSTEM
-                // this also removes all rtshader material properties and e.g. the triplanar samples break
-                // however if we skip this, samples segfault on reloading
-                mShaderGenerator->removeAllShaderBasedTechniques();
-#endif
                 mCurrentSample->_shutdown();
                 mCurrentSample = 0;
                 mSamplePaused = false;     // don't pause next sample
@@ -653,7 +653,7 @@ namespace OgreBites
             {
                 // if we're in the main screen, use the up and down arrow keys to cycle through samples
                 int newIndex = mSampleMenu->getSelectionIndex() + (key == SDLK_UP ? -1 : 1);
-                mSampleMenu->selectItem(Ogre::Math::Clamp<int>(newIndex, 0, mSampleMenu->getNumItems() - 1));
+                mSampleMenu->selectItem(Ogre::Math::Clamp<size_t>(newIndex, 0, mSampleMenu->getNumItems() - 1));
             }
             else if (key == SDLK_RETURN)   // start or stop sample
             {
@@ -866,7 +866,7 @@ namespace OgreBites
                 && mSampleMenu->getNumItems() != 0)
             {
                 int newIndex = mSampleMenu->getSelectionIndex() - evt.y / Ogre::Math::Abs(evt.y);
-                mSampleMenu->selectItem(Ogre::Math::Clamp<int>(newIndex, 0, mSampleMenu->getNumItems() - 1));
+                mSampleMenu->selectItem(Ogre::Math::Clamp<size_t>(newIndex, 0, mSampleMenu->getNumItems() - 1));
             }
 
             return SampleContext::mouseWheelRolled(evt);
@@ -918,7 +918,9 @@ namespace OgreBites
         virtual void setup()
         {
             ApplicationContext::setup();
-
+            mWindow = getRenderWindow();
+            addInputListener(this);
+            if(mGrabInput) setWindowGrab();
 #ifdef OGRE_STATIC_LIB
             // Check if the render system supports any shader profiles.
             // Don't load samples that require shaders if we don't have any shader support, GL ES 1.x for example.
@@ -952,6 +954,7 @@ namespace OgreBites
             mPluginNameMap["Sample_Lighting"]           = (OgreBites::SdkSample *) OGRE_NEW Sample_Lighting();
             mPluginNameMap["Sample_MeshLod"]            = (OgreBites::SdkSample *) OGRE_NEW Sample_MeshLod();
             mPluginNameMap["Sample_ParticleFX"]         = (OgreBites::SdkSample *) OGRE_NEW Sample_ParticleFX();
+            mPluginNameMap["Sample_PBR"]                = (OgreBites::SdkSample *) OGRE_NEW Sample_PBR();
             mPluginNameMap["Sample_Smoke"]              = (OgreBites::SdkSample *) OGRE_NEW Sample_Smoke();
 #       endif // OGRE_PLATFORM_WINRT
             mPluginNameMap["Sample_SkeletalAnimation"]  = (OgreBites::SdkSample *) OGRE_NEW Sample_SkeletalAnimation();
@@ -1010,22 +1013,13 @@ namespace OgreBites
             }
         }
 
-        /*-----------------------------------------------------------------------------
-          | Notify the window size changed or it was moved
-          -----------------------------------------------------------------------------*/
-        virtual void windowMovedOrResized()
-        {
-            mWindow->windowMovedOrResized();    // notify window
-            windowResized(mWindow);                             // notify window event listeners
-        }
-
     protected:
         /*-----------------------------------------------------------------------------
           | Overrides the default window title.
           -----------------------------------------------------------------------------*/
-        virtual Ogre::RenderWindow* createWindow()
+        virtual NativeWindowPair createWindow(const Ogre::String& name, uint32_t w, uint32_t h, Ogre::NameValuePairList miscParams)
         {
-            Ogre::RenderWindow* res = ApplicationContext::createWindow();
+            NativeWindowPair res = ApplicationContext::createWindow(name, w, h, miscParams);
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_APPLE_IOS
             mGestureView = [[SampleBrowserGestureView alloc] init];
@@ -1045,7 +1039,7 @@ namespace OgreBites
         virtual void loadResources()
         {
             Ogre::ResourceGroupManager::getSingleton().initialiseResourceGroup("Essential");
-            mTrayMgr = new TrayManager("BrowserControls", mWindow, this);
+            mTrayMgr = new TrayManager("BrowserControls", getRenderWindow(), this);
             mTrayMgr->showBackdrop("SdkTrays/Bands");
             mTrayMgr->getTrayContainer(TL_NONE)->hide();
 
@@ -1116,6 +1110,8 @@ namespace OgreBites
             Ogre::String sampleDir = cfg.getSetting("SampleFolder");        // Mac OS X just uses Resources/ directory
             Ogre::StringVector sampleList = cfg.getMultiSetting("SamplePlugin");
             Ogre::String startupSampleTitle = cfg.getSetting("StartupSample");
+
+            sampleDir = Ogre::FileSystemLayer::resolveBundlePath(sampleDir);
 
 #if OGRE_PLATFORM != OGRE_PLATFORM_APPLE && OGRE_PLATFORM != OGRE_PLATFORM_APPLE_IOS
             if (sampleDir.empty()) sampleDir = ".";   // user didn't specify plugins folder, try current one
@@ -1246,11 +1242,6 @@ namespace OgreBites
           -----------------------------------------------------------------------------*/
         virtual void unloadSamples()
         {
-#ifdef INCLUDE_RTSHADER_SYSTEM
-            // Generator might still be uninitialized e. g. if we directly quit the browser from the config dialog.
-            if(mShaderGenerator != NULL)
-                mShaderGenerator->removeAllShaderBasedTechniques(); // clear techniques from the RTSS
-#endif
 #ifdef OGRE_STATIC_LIB
             const Ogre::Root::PluginInstanceList pluginList = mRoot->getInstalledPlugins();
             for(unsigned int i = 0; i < pluginList.size(); i++)
@@ -1521,6 +1512,7 @@ namespace OgreBites
         SampleBrowserGestureView *mGestureView;
 #endif
         bool mIsShuttingDown;
+        bool mGrabInput;
     };
 }
 

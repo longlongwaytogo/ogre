@@ -33,6 +33,8 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 #include "OgreHardwareBufferManager.h"
 
 namespace Ogre {
+
+
     // Default threshold at which glMapBuffer becomes more efficient than glBufferSubData (32k?)
     //TODO Double check that this still holds.
 #       define OGRE_GL_DEFAULT_MAP_BUFFER_THRESHOLD (1024 * 32)
@@ -41,12 +43,15 @@ namespace Ogre {
     class _OgreGL3PlusExport GL3PlusHardwareBufferManagerBase : public HardwareBufferManagerBase
     {
     protected:
+        GL3PlusRenderSystem* mRenderSystem;
         char* mScratchBufferPool;
         OGRE_MUTEX(mScratchMutex);
         size_t mMapBufferThreshold;
 
         UniformBufferList mShaderStorageBuffers;
 
+        VertexDeclaration* createVertexDeclarationImpl(void);
+        void destroyVertexDeclarationImpl(VertexDeclaration* decl);
     public:
         GL3PlusHardwareBufferManagerBase();
         ~GL3PlusHardwareBufferManagerBase();
@@ -70,11 +75,11 @@ namespace Ogre {
         /// Create a render to vertex buffer
         RenderToVertexBufferSharedPtr createRenderToVertexBuffer();
 
-        /// Utility function to get the correct GL usage based on HBU's
-        static GLenum getGLUsage(unsigned int usage);
-
         /// Utility function to get the correct GL type based on VET's
         static GLenum getGLType(VertexElementType type);
+
+        GL3PlusStateCacheManager * getStateCacheManager();
+        void notifyContextDestroyed(GLContext* context);
 
         /** Allocator method to allow us to use a pool of memory as a scratch
             area for hardware buffers. This is because glMapBuffer is incredibly
@@ -101,8 +106,8 @@ namespace Ogre {
     //     UniformBufferList mShaderStorageBuffers;
 
     public:
-    GL3PlusHardwareBufferManager()
-        : HardwareBufferManager(OGRE_NEW GL3PlusHardwareBufferManagerBase())
+        GL3PlusHardwareBufferManager()
+            : HardwareBufferManager(OGRE_NEW GL3PlusHardwareBufferManagerBase())
         {
 
         }
@@ -112,9 +117,9 @@ namespace Ogre {
             OGRE_DELETE mImpl;
         }
 
-        /// Utility function to get the correct GL usage based on HBU's.
-        static GLenum getGLUsage(unsigned int usage)
-        { return GL3PlusHardwareBufferManagerBase::getGLUsage(usage); }
+        /// Utility function to notify context depended resources
+        void notifyContextDestroyed(GLContext* context)
+            { static_cast<GL3PlusHardwareBufferManagerBase*>(mImpl)->notifyContextDestroyed(context); }
 
         /// Utility function to get the correct GL type based on VET's.
         static GLenum getGLType(VertexElementType type)

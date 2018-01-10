@@ -27,51 +27,33 @@
 */
 
 #include "OgreGLSLShaderFactory.h"
-#include "OgreGLSLMonolithicProgramManager.h"
-#include "OgreGLSLSeparableProgramManager.h"
+#include "OgreGLSLProgramManager.h"
 #include "OgreGLSLShader.h"
 #include "OgreRoot.h"
 
 namespace Ogre 
 {
 
-    GLSLMonolithicProgramManager* GLSLShaderFactory::mMonolithicProgramManager = NULL;
-    GLSLSeparableProgramManager* GLSLShaderFactory::mSeparableProgramManager = NULL;
+    GLSLProgramManager* GLSLShaderFactory::mProgramManager = NULL;
     
     String GLSLShaderFactory::mLanguageName = "glsl";
     
 
-    GLSLShaderFactory::GLSLShaderFactory(const GL3PlusSupport& support)
+    GLSLShaderFactory::GLSLShaderFactory(GL3PlusRenderSystem* renderSystem)
     {
-        if (mMonolithicProgramManager == NULL)
+        if (mProgramManager == NULL)
         {
-            mMonolithicProgramManager = new GLSLMonolithicProgramManager(support);
-        }
-        if(Root::getSingleton().getRenderSystem()->getCapabilities()->hasCapability(RSC_SEPARATE_SHADER_OBJECTS))
-        {
-            if (mSeparableProgramManager == NULL)
-            {
-                mSeparableProgramManager = new GLSLSeparableProgramManager(support);
-            }
+            mProgramManager = new GLSLProgramManager(renderSystem);
         }
     }
     
 
     GLSLShaderFactory::~GLSLShaderFactory(void)
     {
-        if (mMonolithicProgramManager)
+        if (mProgramManager)
         {
-            delete mMonolithicProgramManager;
-            mMonolithicProgramManager = NULL;
-        }
-
-        if(Root::getSingleton().getRenderSystem()->getCapabilities()->hasCapability(RSC_SEPARATE_SHADER_OBJECTS))
-        {
-            if (mSeparableProgramManager)
-            {
-                delete mSeparableProgramManager;
-                mSeparableProgramManager = NULL;
-            }
+            delete mProgramManager;
+            mProgramManager = NULL;
         }
     }
     

@@ -600,14 +600,6 @@ namespace Ogre {
         assign( str );
     }
     //--------------------------------------------------------------------------
-#if OGRE_STRING_USE_CUSTOM_MEMORY_ALLOCATOR
-    UTFString::UTFString( const Ogre::String& str )
-    {
-        _init();
-        assign( str.c_str() );
-    }
-#endif
-    //--------------------------------------------------------------------------
     UTFString::~UTFString()
     {
         _cleanBuffer();
@@ -1645,20 +1637,6 @@ namespace Ogre {
     {
         return std::wstring( asWStr() );
     }
-
-#if OGRE_STRING_USE_CUSTOM_MEMORY_ALLOCATOR
-    //! implicit cast to Ogre::String
-    UTFString::operator Ogre::String() const 
-    {
-#if OGRE_WCHAR_T_STRINGS
-        return Ogre::String( asWStr() );
-#else
-        return Ogre::String( asUTF8().c_str() );
-#endif
-    }
-#endif
-
-
 
     bool UTFString::_utf16_independent_char( code_point cp )
     {

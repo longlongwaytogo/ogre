@@ -23,9 +23,9 @@ public:
         mPatchPass->setPolygonMode(box->isChecked() ? PM_WIREFRAME : PM_SOLID);
 
 #ifdef INCLUDE_RTSHADER_SYSTEM
-
+        Material* mat = mPatchPass->getParent()->getParent();
         // Invalidate material in order to reflect polygon mode change in the generated shader based pass.
-        mShaderGenerator->invalidateMaterial(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, mPatchPass->getParent()->getParent()->getName());
+        mShaderGenerator->invalidateMaterial(RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME, mat->getName(), mat->getGroup());
 #endif
     }
 
@@ -53,7 +53,9 @@ protected:
     {
         // setup some basic lighting for our scene
         mSceneMgr->setAmbientLight(ColourValue(0.5, 0.5, 0.5));
-        mSceneMgr->createLight()->setPosition(100, 100, 100);
+        mSceneMgr->getRootSceneNode()
+            ->createChildSceneNode(Vector3(100, 100, 100))
+            ->attachObject(mSceneMgr->createLight());
 
         // define the control point vertices for our patch
         PatchVertex verts[9] =

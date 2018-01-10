@@ -31,7 +31,9 @@ protected:
     {
         // setup some basic lighting for our scene
         mSceneMgr->setAmbientLight(ColourValue(0.3, 0.3, 0.3));
-        mSceneMgr->createLight()->setPosition(20, 80, 50);
+        mSceneMgr->getRootSceneNode()
+            ->createChildSceneNode(Vector3(20, 80, 50))
+            ->attachObject(mSceneMgr->createLight());
         
         mSceneMgr->setSkyBox(true, "Examples/MorningSkyBox");
 
@@ -41,18 +43,15 @@ protected:
         headNode->attachObject(head);
 
         mCameraMan->setStyle(CS_MANUAL);   // we will be controlling the camera ourselves, so disable the camera man
-        mCamera->setAutoTracking(true, headNode);   // make the camera face the head
-
-        // create a camera node and attach camera to it
-        SceneNode* camNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
-        camNode->attachObject(mCamera);
+        mCameraNode->setAutoTracking(true, headNode);   // make the camera face the head
+        mCameraNode->setFixedYawAxis(true);
         
         // set up a 10 second animation for our camera, using spline interpolation for nice curves
         Animation* anim = mSceneMgr->createAnimation("CameraTrack", 10);
         anim->setInterpolationMode(Animation::IM_SPLINE);
 
         // create a track to animate the camera's node
-        NodeAnimationTrack* track = anim->createNodeTrack(0, camNode);
+        NodeAnimationTrack* track = anim->createNodeTrack(0, mCameraNode);
 
         // create keyframes for our track
         track->createNodeKeyFrame(0)->setTranslate(Vector3(200, 0, 0));

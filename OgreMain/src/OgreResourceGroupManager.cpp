@@ -657,8 +657,9 @@ namespace Ogre {
         }
     }
     //-----------------------------------------------------------------------
-    DataStreamPtr ResourceGroupManager::openResource(const String& resourceName,
+    DataStreamPtr ResourceGroupManager::openResourceImpl(const String& resourceName,
                                                      const String& groupName,
+                                                     bool searchGroupsIfNotFound,
                                                      Resource* resourceBeingLoaded) const
     {
         OgreAssert(!resourceName.empty(), "resourceName is empty string");
@@ -679,10 +680,11 @@ namespace Ogre {
                 "ResourceGroupManager::openResource");
         }
 
-        Archive* pArch = NULL;
+        Archive* pArch = resourceExists(grp, resourceName);
 
-        if (groupName == AUTODETECT_RESOURCE_GROUP_NAME || grp->inGlobalPool ||
-            (!OGRE_RESOURCEMANAGER_STRICT && (groupName == DEFAULT_RESOURCE_GROUP_NAME)))
+        if (pArch == NULL && (searchGroupsIfNotFound ||
+            groupName == AUTODETECT_RESOURCE_GROUP_NAME || grp->inGlobalPool ||
+            (!OGRE_RESOURCEMANAGER_STRICT && (groupName == DEFAULT_RESOURCE_GROUP_NAME))))
         {
             std::pair<Archive*, ResourceGroup*> ret = resourceExistsInAnyGroupImpl(resourceName);
 
@@ -691,8 +693,6 @@ namespace Ogre {
             }
 
             pArch = ret.first;
-        } else {
-            pArch = resourceExists(grp, resourceName);
         }
 
         if (pArch)
@@ -1091,7 +1091,7 @@ namespace Ogre {
     {
         fireResourceRemove(res);
 
-        if (mCurrentGroup)
+        if (mCurrentGroup && res->getGroup() == mCurrentGroup->name)
         {
             // Do nothing - we're batch unloading so list will be cleared
         }
@@ -1249,7 +1249,7 @@ namespace Ogre {
             for (LoadUnloadResourceList::iterator k = j->second.begin();
                 k != j->second.end(); ++k)
             {
-                (*k)->getCreator()->remove((*k)->getHandle());
+                (*k)->getCreator()->remove((*k));
             }
         }
         grp->loadResourceOrderMap.clear();
@@ -1582,7 +1582,7 @@ namespace Ogre {
                 "ResourceGroupManager::resourceExists");
         }
 
-        return resourceExists(grp, resourceName);
+        return resourceExists(grp, resourceName) != 0;
     }
     //-----------------------------------------------------------------------
     Archive* ResourceGroupManager::resourceExists(ResourceGroup* grp, const String& resourceName) const
@@ -1671,7 +1671,7 @@ namespace Ogre {
     //-----------------------------------------------------------------------
     bool ResourceGroupManager::resourceExistsInAnyGroup(const String& filename) const
     {
-        return resourceExistsInAnyGroupImpl(filename).first;
+        return resourceExistsInAnyGroupImpl(filename).first != 0;
     }
     //-----------------------------------------------------------------------
     const String& ResourceGroupManager::findGroupContainingResource(const String& filename) const

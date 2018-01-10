@@ -42,24 +42,18 @@ namespace Ogre {
 
     */
 
-    class _OgreGLES2Export GLSLESLinkProgram : public GLSLESProgramCommon MANAGED_RESOURCE
+    class _OgreGLES2Export GLSLESLinkProgram : public GLSLESProgramCommon
     {
     protected:
         virtual void extractLayoutQualifiers(void) {}
 
         /// Compiles and links the vertex and fragment programs
         virtual void compileAndLink(void);
-        /// Put a program in use
-        virtual void _useProgram(void);
 
         void buildGLUniformReferences(void);
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
-        /** See AndroidResource. */
         virtual void notifyOnContextLost();
-        
-        /** See AndroidResource. */
-        virtual void notifyOnContextReset();
 #endif
         
     public:

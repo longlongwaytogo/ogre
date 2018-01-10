@@ -66,16 +66,12 @@ namespace Ogre {
     class _OgreGLExport GLRTTManager : public Singleton<GLRTTManager>
     {
     public:
-        virtual ~GLRTTManager() {}
+        GLRTTManager();
+        virtual ~GLRTTManager();
 
         /** Create a texture rendertarget object
          */
         virtual RenderTexture *createRenderTexture(const String &name, const GLSurfaceDesc &target, bool writeGamma, uint fsaa) = 0;
-
-        /** Request the specify render buffer in case shared somewhere. Ignore
-            silently if surface.buffer is 0.
-        */
-        void requestRenderBuffer(const GLSurfaceDesc &surface);
 
         /** Release a render buffer. Ignore silently if surface.buffer is 0.
          */
@@ -108,6 +104,11 @@ namespace Ogre {
         /** Get the closest supported alternative format. If format is supported, returns format.
          */
         PixelFormat getSupportedAlternative(PixelFormat format);
+
+        /// @copydoc Singleton::getSingleton()
+        static GLRTTManager& getSingleton(void);
+        /// @copydoc Singleton::getSingleton()
+        static GLRTTManager* getSingletonPtr(void);
     protected:
         /** Frame Buffer Object properties for a certain texture format.
          */

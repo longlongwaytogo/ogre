@@ -43,6 +43,7 @@ namespace Ogre {
         , mMaxSupportedAnisotropy(0)
         , mVertexTextureUnitsShared(0)
         , mGeometryProgramNumOutputVertices(0)
+        , mNumVertexAttributes(1)
     {
         for(int i = 0; i < CAPS_CATEGORY_COUNT; i++)
         {
@@ -203,6 +204,9 @@ namespace Ogre {
                  "   - BC6H/BC7: "
                  + StringConverter::toString(hasCapability(RSC_TEXTURE_COMPRESSION_BC6H_BC7), true));
             pLog->logMessage(
+                 "   - ASTC: "
+                 + StringConverter::toString(hasCapability(RSC_TEXTURE_COMPRESSION_ASTC), true));
+            pLog->logMessage(
                 "   - Mipmaps for compressed formats: "
                 + StringConverter::toString(hasCapability(RSC_AUTOMIPMAP_COMPRESSED), true));
         }
@@ -259,11 +263,11 @@ namespace Ogre {
             " * Vertex texture fetch: "
             + StringConverter::toString(hasCapability(RSC_VERTEX_TEXTURE_FETCH), true));
         pLog->logMessage(
-             " * Number of world matrices: "
-             + StringConverter::toString(mNumWorldMatrices));
-        pLog->logMessage(
              " * Number of texture units: "
              + StringConverter::toString(mNumTextureUnits));
+        pLog->logMessage(
+             " * Number of vertex attributes: "
+             + StringConverter::toString(mNumVertexAttributes));
         pLog->logMessage(
              " * Stencil buffer depth: "
              + StringConverter::toString(mStencilBufferBitDepth));
@@ -301,6 +305,12 @@ namespace Ogre {
             pLog->logMessage(
                 " * GLSL SSO redeclare interface block: "
                 + StringConverter::toString(hasCapability(RSC_GLSL_SSO_REDECLARE), true));
+            pLog->logMessage(
+                " * Debugging/ profiling events: "
+                + StringConverter::toString(hasCapability(RSC_DEBUG), true));
+            pLog->logMessage(
+                " * Map buffer storage: "
+                + StringConverter::toString(hasCapability(RSC_MAPBUFFER), true));
         }
 
         if (mCategoryRelevant[CAPS_CATEGORY_D3D9])

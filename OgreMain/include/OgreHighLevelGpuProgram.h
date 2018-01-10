@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 #include "OgrePrerequisites.h"
 #include "OgreGpuProgram.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -69,6 +70,8 @@ namespace Ogre {
         GpuProgramPtr mAssemblerProgram;
         /// Have we built the name->index parameter map yet?
         mutable bool mConstantDefsBuilt;
+        /// Preprocessor options
+        String mPreprocessorDefines;
 
         /// Internal load high-level portion if not loaded
         virtual void loadHighLevel(void);
@@ -123,12 +126,16 @@ namespace Ogre {
 
         virtual size_t calculateSize(void) const;
 
-
-
-
+        /** Sets the preprocessor defines used to compile the program. */
+        void setPreprocessorDefines(const String& defines) { mPreprocessorDefines = defines; }
+        /** Gets the preprocessor defines used to compile the program. */
+        const String& getPreprocessorDefines(void) const { return mPreprocessorDefines; }
     };
     /** @} */
     /** @} */
 
 }
+
+#include "OgreHeaderSuffix.h"
+
 #endif

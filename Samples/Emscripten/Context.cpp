@@ -106,7 +106,7 @@ void Context::destroyMaterials( const Ogre::String& resourceGroupID )
             
             if( resourceGroupID == material->getGroup())
             {
-                mShaderGenerator->removeAllShaderBasedTechniques( matName );
+                mShaderGenerator->removeAllShaderBasedTechniques( matName, material->getGroup() );
                 material->unload();
                 material.reset();
                 materialNamesToRemove.push_back( matName );
@@ -226,6 +226,9 @@ void Context::passAssetAsArrayBuffer(unsigned char* arr, int length) {
 
 void Context::setup() {
     OgreBites::ApplicationContext::setup();
+    mWindow = getRenderWindow();
+    addInputListener(this);
+
     mCurrentSample = new Sample_Character();
     mCurrentSample->setShaderGenerator(mShaderGenerator);
     mCurrentSample->_setup(mWindow, mFSLayer, mOverlaySystem);

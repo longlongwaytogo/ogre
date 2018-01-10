@@ -44,6 +44,8 @@ THE SOFTWARE.
 using namespace std;
 using namespace Ogre;
 
+namespace {
+
 void help(void)
 {
     // Print help message
@@ -686,7 +688,7 @@ void buildLod(MeshPtr& mesh)
     int numLod;
     LodConfig lodConfig;
     lodConfig.mesh = mesh;
-    lodConfig.strategy = DistanceLodStrategy::getSingletonPtr();
+    lodConfig.strategy = DistanceLodBoxStrategy::getSingletonPtr();
     if (askLodDtls) {
         do {
             std::cout <<
@@ -710,7 +712,7 @@ void buildLod(MeshPtr& mesh)
                 if (response == "p") {
                     lodConfig.strategy = PixelCountLodStrategy::getSingletonPtr();
                 } else if (response == "d") {
-                    lodConfig.strategy = DistanceLodStrategy::getSingletonPtr();
+                    lodConfig.strategy = DistanceLodBoxStrategy::getSingletonPtr();
                 } else {
                     std::cout << "Wrong answer!\n";
                     response = "";
@@ -795,7 +797,7 @@ void buildLod(MeshPtr& mesh)
                     }
                 } while (response == "");
 
-                if (lodConfig.strategy == DistanceLodStrategy::getSingletonPtr()) {
+                if (lodConfig.strategy == DistanceLodBoxStrategy::getSingletonPtr()) {
                     cout << "\nEnter the distance for LOD" <<
                     (iLod + 1) << " to activate. (distance of camera and mesh in Ogre units)";
                     cout << "\nIt should be more then last Lod level: " << minDistance << "\n";
@@ -807,7 +809,7 @@ void buildLod(MeshPtr& mesh)
                 while (1) {
                     cin >> response;
                     lodLevel.distance = StringConverter::parseReal(response);
-                    if (lodConfig.strategy == DistanceLodStrategy::getSingletonPtr()) {
+                    if (lodConfig.strategy == DistanceLodBoxStrategy::getSingletonPtr()) {
                         if (lodLevel.distance > minDistance) {
                             break;
                         } else {
@@ -976,6 +978,7 @@ void resolveColourAmbiguities(Mesh* mesh)
     }
 
 
+}
 }
 
 int main(int numargs, char** args)

@@ -58,6 +58,7 @@ namespace Ogre {
         mLodStrategy(LodStrategyManager::getSingleton().getDefaultStrategy()),
         mHasManualLodLevel(false),
         mNumLods(1),
+        mBufferManager(0),
         mVertexBufferUsage(HardwareBuffer::HBU_STATIC_WRITE_ONLY),
         mIndexBufferUsage(HardwareBuffer::HBU_STATIC_WRITE_ONLY),
         mVertexBufferShadowBuffer(true),
@@ -85,6 +86,11 @@ namespace Ogre {
         // have to call this here reather than in Resource destructor
         // since calling virtual methods in base destructors causes crash
         unload();
+    }
+    //-----------------------------------------------------------------------
+    HardwareBufferManagerBase* Mesh::getHardwareBufferManager()
+    {
+        return mBufferManager ? mBufferManager : HardwareBufferManager::getSingletonPtr();
     }
     //-----------------------------------------------------------------------
     SubMesh* Mesh::createSubMesh()
@@ -117,6 +123,7 @@ namespace Ogre {
         }
         SubMeshList::iterator i = mSubMeshList.begin();
         std::advance(i, index);
+        OGRE_DELETE *i;
         mSubMeshList.erase(i);
         
         // Fix up any name/index entries
@@ -307,7 +314,7 @@ namespace Ogre {
 
         // New Mesh is assumed to be manually defined rather than loaded since you're cloning it for a reason
         String theGroup;
-        if (newGroup == BLANKSTRING)
+        if (newGroup.empty())
         {
             theGroup = this->getGroup();
         }
@@ -317,18 +324,23 @@ namespace Ogre {
         }
         MeshPtr newMesh = MeshManager::getSingleton().createManual(newName, theGroup);
 
+        newMesh->mBufferManager = mBufferManager;
+        newMesh->mVertexBufferUsage = mVertexBufferUsage;
+        newMesh->mIndexBufferUsage = mIndexBufferUsage;
+        newMesh->mVertexBufferShadowBuffer = mVertexBufferShadowBuffer;
+        newMesh->mIndexBufferShadowBuffer = mIndexBufferShadowBuffer;
+
         // Copy submeshes first
         vector<SubMesh*>::type::iterator subi;
         for (subi = mSubMeshList.begin(); subi != mSubMeshList.end(); ++subi)
         {
             (*subi)->clone("", newMesh.get());
-
         }
 
         // Copy shared geometry and index map, if any
         if (sharedVertexData)
         {
-            newMesh->sharedVertexData = sharedVertexData->clone();
+            newMesh->sharedVertexData = sharedVertexData->clone(true, mBufferManager);
             newMesh->sharedBlendIndexToBoneIndexMap = sharedBlendIndexToBoneIndexMap;
         }
 
@@ -361,12 +373,8 @@ namespace Ogre {
             newLod.value = lod.value;
             if (lod.edgeData) {
                 newLod.edgeData = lod.edgeData->clone();
+            }
         }
-        }
-        newMesh->mVertexBufferUsage = mVertexBufferUsage;
-        newMesh->mIndexBufferUsage = mIndexBufferUsage;
-        newMesh->mVertexBufferShadowBuffer = mVertexBufferShadowBuffer;
-        newMesh->mIndexBufferShadowBuffer = mIndexBufferShadowBuffer;
 
         newMesh->mSkeletonName = mSkeletonName;
         newMesh->mSkeleton = mSkeleton;
@@ -517,11 +525,11 @@ namespace Ogre {
                 {
                     mSkeleton.reset();
                     // Log this error
-                    String msg = "Unable to load skeleton ";
-                    msg += skelName + " for Mesh " + mName
-                        + ". This Mesh will not be animated. "
+                    String msg = "Unable to load skeleton '";
+                    msg += skelName + "' for Mesh '" + mName
+                        + "'. This Mesh will not be animated. "
                         + "You can ignore this message if you are using an offline tool.";
-                    LogManager::getSingleton().logMessage(msg);
+                    LogManager::getSingleton().logError(msg);
 
                 }
 
@@ -702,13 +710,13 @@ namespace Ogre {
         if (maxBones > OGRE_MAX_BLEND_WEIGHTS)
         {
             // Warn that we've reduced bone assignments
-            LogManager::getSingleton().logMessage("WARNING: the mesh '" + mName + "' "
+            LogManager::getSingleton().logWarning("the mesh '" + mName + "' "
                 "includes vertices with more than " +
                 StringConverter::toString(OGRE_MAX_BLEND_WEIGHTS) + " bone assignments. "
                 "The lowest weighted assignments beyond this limit have been removed, so "
                 "your animation may look slightly different. To eliminate this, reduce "
                 "the number of bone assignments per vertex on your mesh to " +
-                StringConverter::toString(OGRE_MAX_BLEND_WEIGHTS) + ".", LML_CRITICAL);
+                StringConverter::toString(OGRE_MAX_BLEND_WEIGHTS) + ".");
             // we've adjusted them down to the max
             maxBones = OGRE_MAX_BLEND_WEIGHTS;
 
@@ -717,11 +725,11 @@ namespace Ogre {
         if (existsNonSkinnedVertices)
         {
             // Warn that we've non-skinned vertices
-            LogManager::getSingleton().logMessage("WARNING: the mesh '" + mName + "' "
+            LogManager::getSingleton().logWarning("the mesh '" + mName + "' "
                 "includes vertices without bone assignments. Those vertices will "
                 "transform to wrong position when skeletal animation enabled. "
                 "To eliminate this, assign at least one bone assignment per vertex "
-                "on your mesh.", LML_CRITICAL);
+                "on your mesh.");
         }
 
         return maxBones;
@@ -787,7 +795,6 @@ namespace Ogre {
     {
         // Create or reuse blend weight / indexes buffer
         // Indices are always a UBYTE4 no matter how many weights per vertex
-        // Weights are more specific though since they are Reals
         VertexDeclaration* decl = targetVertexData->vertexDeclaration;
         VertexBufferBinding* bind = targetVertexData->vertexBufferBinding;
         unsigned short bindIndex;
@@ -813,10 +820,11 @@ namespace Ogre {
             // Get new binding
             bindIndex = bind->getNextIndex();
         }
-
-        HardwareVertexBufferSharedPtr vbuf =
-            HardwareBufferManager::getSingleton().createVertexBuffer(
-                sizeof(unsigned char)*4 + sizeof(float)*numBlendWeightsPerVertex,
+        // type of Weights is settable on the MeshManager.
+        VertexElementType weightsBaseType = MeshManager::getSingleton().getBlendWeightsBaseElementType();
+        VertexElementType weightsVertexElemType = VertexElement::multiplyTypeCount( weightsBaseType, numBlendWeightsPerVertex );
+        HardwareVertexBufferSharedPtr vbuf = getHardwareBufferManager()->createVertexBuffer(
+            sizeof( unsigned char ) * 4 + VertexElement::getTypeSize( weightsVertexElemType ),
                 targetVertexData->vertexCount,
                 HardwareBuffer::HBU_STATIC_WRITE_ONLY,
                 true // use shadow buffer
@@ -840,9 +848,7 @@ namespace Ogre {
             const VertexElement& idxElem =
                 decl->insertElement(insertPoint, bindIndex, 0, VET_UBYTE4, VES_BLEND_INDICES);
             const VertexElement& wtElem =
-                decl->insertElement(insertPoint+1, bindIndex, sizeof(unsigned char)*4,
-                VertexElement::multiplyTypeCount(VET_FLOAT1, numBlendWeightsPerVertex),
-                VES_BLEND_WEIGHTS);
+                decl->insertElement(insertPoint+1, bindIndex, sizeof(unsigned char)*4, weightsVertexElemType, VES_BLEND_WEIGHTS);
             pIdxElem = &idxElem;
             pWeightElem = &wtElem;
         }
@@ -853,13 +859,30 @@ namespace Ogre {
             const VertexElement& idxElem =
                 decl->addElement(bindIndex, 0, VET_UBYTE4, VES_BLEND_INDICES);
             const VertexElement& wtElem =
-                decl->addElement(bindIndex, sizeof(unsigned char)*4,
-                VertexElement::multiplyTypeCount(VET_FLOAT1, numBlendWeightsPerVertex),
-                VES_BLEND_WEIGHTS);
+                decl->addElement(bindIndex, sizeof(unsigned char)*4, weightsVertexElemType, VES_BLEND_WEIGHTS );
             pIdxElem = &idxElem;
             pWeightElem = &wtElem;
         }
 
+        unsigned int maxIntWt = 0;
+        // keeping a switch out of the loop
+        switch ( weightsBaseType )
+        {
+            default:
+            	OgreAssert(false, "Invalid BlendWeightsBaseElementType");
+            	break;
+            case VET_FLOAT1:
+                break;
+            case VET_UBYTE4_NORM:
+                maxIntWt = 0xff;
+                break;
+            case VET_USHORT2_NORM:
+                maxIntWt = 0xffff;
+                break;
+            case VET_SHORT2_NORM:
+                maxIntWt = 0x7fff;
+                break;
+        }
         // Assign data
         size_t v;
         VertexBoneAssignmentList::const_iterator i, iend;
@@ -868,30 +891,97 @@ namespace Ogre {
         unsigned char *pBase = static_cast<unsigned char*>(
             vbuf->lock(HardwareBuffer::HBL_DISCARD));
         // Iterate by vertex
-        float *pWeight;
-        unsigned char *pIndex;
         for (v = 0; v < targetVertexData->vertexCount; ++v)
         {
-            /// Convert to specific pointers
-            pWeightElem->baseVertexPointerToElement(pBase, &pWeight);
-            pIdxElem->baseVertexPointerToElement(pBase, &pIndex);
+            // collect the indices/weights in these arrays
+            unsigned char indices[ 4 ] = { 0, 0, 0, 0 };
+            float weights[ 4 ] = { 1.0f, 0.0f, 0.0f, 0.0f };
             for (unsigned short bone = 0; bone < numBlendWeightsPerVertex; ++bone)
             {
                 // Do we still have data for this vertex?
                 if (i != iend && i->second.vertexIndex == v)
                 {
-                    // If so, write weight
-                    *pWeight++ = i->second.weight;
-                    *pIndex++ = static_cast<unsigned char>(boneIndexToBlendIndexMap[i->second.boneIndex]);
+                    // If so, grab weight and index
+                    weights[ bone ] = i->second.weight;
+                    indices[ bone ] = static_cast<unsigned char>( boneIndexToBlendIndexMap[ i->second.boneIndex ] );
                     ++i;
+                }
+            }
+            // if weights are integers,
+            if ( weightsBaseType != VET_FLOAT1 )
+            {
+                // pack the float weights into shorts/bytes
+                unsigned int intWeights[ 4 ];
+                unsigned int sum = 0;
+                const unsigned int wtScale = maxIntWt;  // this value corresponds to a weight of 1.0
+                for ( int ii = 0; ii < 4; ++ii )
+                {
+                    unsigned int bw = static_cast<unsigned int>( weights[ ii ] * wtScale );
+                    intWeights[ ii ] = bw;
+                    sum += bw;
+                }
+                // if the sum doesn't add up due to roundoff error, we need to adjust the intWeights so that the sum is wtScale
+                if ( sum != maxIntWt )
+                {
+                    // find the largest weight (it isn't necessarily the first one...)
+                    int iMaxWeight = 0;
+                    unsigned int maxWeight = 0;
+                    for ( int ii = 0; ii < 4; ++ii )
+                    {
+                        unsigned int bw = intWeights[ ii ];
+                        if ( bw > maxWeight )
+                        {
+                            iMaxWeight = ii;
+                            maxWeight = bw;
+                        }
+                    }
+                    // Adjust the largest weight to make sure the sum is correct.
+                    // The idea is that changing the largest weight will have the smallest effect
+                    // on the ratio of weights.  This works best when there is one dominant weight,
+                    // and worst when 2 or more weights are similar in magnitude.
+                    // A better method could be used to reduce the quantization error, but this is
+                    // being done at run-time so it needs to be quick.
+                    intWeights[ iMaxWeight ] += maxIntWt - sum;
+                }
+
+                // now write the weights
+                if ( weightsBaseType == VET_UBYTE4_NORM )
+                {
+                    // write out the weights as bytes
+                    unsigned char* pWeight;
+                    pWeightElem->baseVertexPointerToElement( pBase, &pWeight );
+                    // NOTE: always writes out 4 regardless of numBlendWeightsPerVertex
+                    for ( int ii = 0; ii < 4; ++ii )
+                    {
+                        *pWeight++ = static_cast<unsigned char>( intWeights[ ii ] );
+                    }
                 }
                 else
                 {
-                    // Ran out of assignments for this vertex, use weight 0 to indicate empty.
-                    // If no bones are defined (an error in itself) set bone 0 as the assigned bone. 
-                    *pWeight++ = (bone == 0) ? 1.0f : 0.0f;
-                    *pIndex++ = 0;
+                    // write out the weights as shorts
+                    unsigned short* pWeight;
+                    pWeightElem->baseVertexPointerToElement( pBase, &pWeight );
+                    for ( int ii = 0; ii < numBlendWeightsPerVertex; ++ii )
+                    {
+                        *pWeight++ = static_cast<unsigned short>( intWeights[ ii ] );
+                    }
                 }
+            }
+            else
+            {
+                // write out the weights as floats
+                float* pWeight;
+                pWeightElem->baseVertexPointerToElement( pBase, &pWeight );
+                for ( int ii = 0; ii < numBlendWeightsPerVertex; ++ii )
+                {
+                    *pWeight++ = weights[ ii ];
+                }
+            }
+            unsigned char* pIndex;
+            pIdxElem->baseVertexPointerToElement( pBase, &pIndex );
+            for ( int ii = 0; ii < 4; ++ii )
+            {
+                *pIndex++ = indices[ ii ];
             }
             pBase += vbuf->getVertexSize();
         }
@@ -900,7 +990,7 @@ namespace Ogre {
 
     }
     //---------------------------------------------------------------------
-    Real distLineSegToPoint( const Vector3& line0, const Vector3& line1, const Vector3& pt )
+    static Real distLineSegToPoint( const Vector3& line0, const Vector3& line1, const Vector3& pt )
     {
         Vector3 v01 = line1 - line0;
         Real tt = v01.dotProduct( pt - line0 ) / std::max( v01.dotProduct(v01), std::numeric_limits<Real>::epsilon() );
@@ -909,7 +999,7 @@ namespace Ogre {
         return pt.distance( onLine );
     }
     //---------------------------------------------------------------------
-    Real _computeBoneBoundingRadiusHelper( VertexData* vertexData,
+    static Real _computeBoneBoundingRadiusHelper( VertexData* vertexData,
         const Mesh::VertexBoneAssignmentList& boneAssignments,
         const vector<Vector3>::type& bonePositions,
         const vector< vector<ushort>::type >::type& boneChildren
@@ -1334,7 +1424,7 @@ namespace Ogre {
                     prevTexCoordElem->getSource());
             // Now create a new buffer, which includes the previous contents
             // plus extra space for the 3D coords
-            newBuffer = HardwareBufferManager::getSingleton().createVertexBuffer(
+            newBuffer = getHardwareBufferManager()->createVertexBuffer(
                 origBuffer->getVertexSize() + 3*sizeof(float),
                 vertexData->vertexCount,
                 origBuffer->getUsage(),
@@ -1400,7 +1490,7 @@ namespace Ogre {
                     tangentsCalc.build(targetSemantic, sourceTexCoordSet, index);
 
                 // If any vertex splitting happened, we have to give them bone assignments
-                if (getSkeletonName() != BLANKSTRING)
+                if (!getSkeletonName().empty())
                 {
                     for (TangentSpaceCalc::IndexRemapList::iterator r = res.indexesRemapped.begin(); 
                         r != res.indexesRemapped.end(); ++r)
@@ -1459,7 +1549,7 @@ namespace Ogre {
                     tangentsCalc.build(targetSemantic, sourceTexCoordSet, index);
 
                 // If any vertex splitting happened, we have to give them bone assignments
-                if (getSkeletonName() != BLANKSTRING)
+                if (!getSkeletonName().empty())
                 {
                     for (TangentSpaceCalc::IndexRemapList::iterator r = res.indexesRemapped.begin(); 
                         r != res.indexesRemapped.end(); ++r)
@@ -1871,7 +1961,7 @@ namespace Ogre {
             sourceVertexData->vertexDeclaration->findElementBySemantic(VES_BLEND_INDICES);
         const VertexElement* srcElemBlendWeights =
             sourceVertexData->vertexDeclaration->findElementBySemantic(VES_BLEND_WEIGHTS);
-        assert (srcElemPos && srcElemBlendIndices && srcElemBlendWeights &&
+        OgreAssert(srcElemPos && srcElemBlendIndices && srcElemBlendWeights,
             "You must supply at least positions, blend indices and blend weights");
         // Get elements for target
         const VertexElement* destElemPos =

@@ -37,6 +37,19 @@ namespace Ogre {
 
     template<> GLRTTManager* Singleton<GLRTTManager>::msSingleton = NULL;
 
+    GLRTTManager* GLRTTManager::getSingletonPtr(void)
+    {
+        return msSingleton;
+    }
+    GLRTTManager& GLRTTManager::getSingleton(void)
+    {
+        assert( msSingleton );  return ( *msSingleton );
+    }
+
+    GLRTTManager::GLRTTManager() {}
+    // need to implement in cpp due to how Ogre::Singleton works
+    GLRTTManager::~GLRTTManager() {}
+
     MultiRenderTarget* GLRTTManager::createMultiRenderTarget(const String & name)
     {
         // TODO: Check rendersystem capabilities before throwing the exception
@@ -58,7 +71,7 @@ namespace Ogre {
         switch (pct)
         {
         case PCT_BYTE:
-            format = PF_A8R8G8B8;
+            format = PF_BYTE_RGBA; // native endian
             break;
         case PCT_SHORT:
             format = PF_SHORT_RGBA;
@@ -78,22 +91,7 @@ namespace Ogre {
             return format;
 
         /// If none at all, return to default
-        return PF_A8R8G8B8;
-    }
-
-    void GLRTTManager::requestRenderBuffer(const GLSurfaceDesc &surface)
-    {
-        if(surface.buffer == 0)
-            return;
-        RBFormat key(surface.buffer->getGLFormat(), surface.buffer->getWidth(), surface.buffer->getHeight(), surface.numSamples);
-        RenderBufferMap::iterator it = mRenderBufferMap.find(key);
-        assert(it != mRenderBufferMap.end());
-        if (it != mRenderBufferMap.end())   // Just in case
-        {
-            assert(it->second.buffer == surface.buffer);
-            // Increase refcount
-            ++it->second.refcount;
-        }
+        return PF_BYTE_RGBA; // native endian
     }
 
     void GLRTTManager::releaseRenderBuffer(const GLSurfaceDesc &surface)

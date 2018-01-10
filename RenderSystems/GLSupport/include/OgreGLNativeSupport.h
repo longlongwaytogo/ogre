@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "OgreGLSupportPrerequisites.h"
 #include "OgreConfigOptionMap.h"
 #include "OgrePixelFormat.h"
+#include "OgreException.h"
 
 namespace Ogre
 {
@@ -79,11 +80,11 @@ namespace Ogre
             * Make sure all the extra options are valid
             * @return string with error message
             */
-            virtual String validateConfig() = 0;
+            virtual String validateConfig() {
+                return "";
+            }
 
-            virtual RenderWindow* createWindow(bool autoCreateWindow,
-                                               RenderSystem *renderSystem,
-                                               const String& windowTitle) = 0;
+            virtual NameValuePairList parseOptions(uint& w, uint& h, bool& fullscreen) = 0;
 
             /// @copydoc RenderSystem::_createRenderWindow
             virtual RenderWindow* newWindow(const String &name,
@@ -133,6 +134,14 @@ namespace Ogre
             ExtensionList extensionList;
 
             ContextProfile mContextProfile;
+
+            template<class C>
+            static void removeDuplicates(C& c)
+            {
+                std::sort(c.begin(), c.end());
+                typename C::iterator p = std::unique(c.begin(), c.end());
+                c.erase(p, c.end());
+            }
     };
     /** @} */
     /** @} */

@@ -95,6 +95,11 @@ namespace Ogre {
         return getDescriptionFor(format).elemBytes;
     }
     //-----------------------------------------------------------------------
+    static size_t astc_slice_size(uint32 width, uint32 height, uint32 blockWidth, uint32 blockHeight)
+    {
+        return ((width + blockWidth - 1) / blockWidth) *
+               ((height + blockHeight - 1) / blockHeight) * 16;
+    }
     size_t PixelUtil::getMemorySize(uint32 width, uint32 height, uint32 depth, PixelFormat format)
     {
         if(isCompressed(format))
@@ -112,14 +117,14 @@ namespace Ogre {
                     return ((width+3)/4)*((height+3)/4)*16 * depth;
                 case PF_BC4_SNORM:
                 case PF_BC4_UNORM:
-                    return ((width+3)/4)*((height+3)/4)*8;
+                    return ((width+3)/4)*((height+3)/4)*8 * depth;
                 case PF_BC5_SNORM:
                 case PF_BC5_UNORM:
                 case PF_BC6H_SF16:
                 case PF_BC6H_UF16:
                 case PF_BC7_UNORM:
                 case PF_BC7_UNORM_SRGB:
-                    return ((width+3)/4)*((height+3)/4)*16;
+                    return ((width+3)/4)*((height+3)/4)*16 * depth;
 
                 // Size calculations from the PVRTC OpenGL extension spec
                 // http://www.khronos.org/registry/gles/extensions/IMG/IMG_texture_compression_pvrtc.txt
@@ -133,17 +138,48 @@ namespace Ogre {
                 case PF_PVRTC2_4BPP:
                     return (std::max((int)width, 8) * std::max((int)height, 8) * 4 + 7) / 8;
 
+                // Size calculations from the ETC spec
+                // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_compressed_ETC1_RGB8_texture.txt
                 case PF_ETC1_RGB8:
                 case PF_ETC2_RGB8:
                 case PF_ETC2_RGBA8:
                 case PF_ETC2_RGB8A1:
-                    return ((width * height) >> 1);
+                    return ((width + 3) / 4) * ((height + 3) / 4) * 8;
+
                 case PF_ATC_RGB:
                     return ((width + 3) / 4) * ((height + 3) / 4) * 8;
                 case PF_ATC_RGBA_EXPLICIT_ALPHA:
                 case PF_ATC_RGBA_INTERPOLATED_ALPHA:
                     return ((width + 3) / 4) * ((height + 3) / 4) * 16;
 
+                case PF_ASTC_RGBA_4X4_LDR:
+                    return astc_slice_size(width, height, 4, 4) * depth;
+                case PF_ASTC_RGBA_5X4_LDR:
+                    return astc_slice_size(width, height, 5, 5) * depth;
+                case PF_ASTC_RGBA_5X5_LDR:
+                    return astc_slice_size(width, height, 5, 5) * depth;
+                case PF_ASTC_RGBA_6X5_LDR:
+                    return astc_slice_size(width, height, 6, 5) * depth;
+                case PF_ASTC_RGBA_6X6_LDR:
+                    return astc_slice_size(width, height, 6, 6) * depth;
+                case PF_ASTC_RGBA_8X5_LDR:
+                    return astc_slice_size(width, height, 8, 5) * depth;
+                case PF_ASTC_RGBA_8X6_LDR:
+                    return astc_slice_size(width, height, 8, 6) * depth;
+                case PF_ASTC_RGBA_8X8_LDR:
+                    return astc_slice_size(width, height, 8, 8) * depth;
+                case PF_ASTC_RGBA_10X5_LDR:
+                    return astc_slice_size(width, height, 10, 5) * depth;
+                case PF_ASTC_RGBA_10X6_LDR:
+                    return astc_slice_size(width, height, 10, 6) * depth;
+                case PF_ASTC_RGBA_10X8_LDR:
+                    return astc_slice_size(width, height, 10, 8) * depth;
+                case PF_ASTC_RGBA_10X10_LDR:
+                    return astc_slice_size(width, height, 10, 10) * depth;
+                case PF_ASTC_RGBA_12X10_LDR:
+                    return astc_slice_size(width, height, 12, 10) * depth;
+                case PF_ASTC_RGBA_12X12_LDR:
+                    return astc_slice_size(width, height, 12, 12) * depth;
                 default:
                 OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "Invalid compressed pixel format",
                     "PixelUtil::getMemorySize");
@@ -528,6 +564,16 @@ namespace Ogre {
                 ((uint8*)dest)[0] = (uint8)Bitwise::floatToFixed(r, 8);
                 ((uint8*)dest)[1] = (uint8)Bitwise::floatToFixed(a, 8);
                 break;
+            case PF_A2B10G10R10:
+            {
+                const uint16 ir = static_cast<uint16>( Math::saturate( r ) * 1023.0f + 0.5f );
+                const uint16 ig = static_cast<uint16>( Math::saturate( g ) * 1023.0f + 0.5f );
+                const uint16 ib = static_cast<uint16>( Math::saturate( b ) * 1023.0f + 0.5f );
+                const uint16 ia = static_cast<uint16>( Math::saturate( a ) * 3.0f + 0.5f );
+
+                ((uint32*)dest)[0] = (ia << 30u) | (ir << 20u) | (ig << 10u) | (ib);
+                break;
+            }
             default:
                 // Not yet supported
                 OGRE_EXCEPT(
@@ -702,7 +748,7 @@ namespace Ogre {
             if(src.format == dst.format && src.left == 0 && src.top == 0 && dst.left == 0 && dst.top == 0)
             {
                 // we can copy with slice granularity, useful for Tex2DArray handling
-                uint32 bytesPerSlice = getMemorySize(src.getWidth(), src.getHeight(), 1, src.format);
+                size_t bytesPerSlice = getMemorySize(src.getWidth(), src.getHeight(), 1, src.format);
                 memcpy(
                     (uint8*)dst.data + bytesPerSlice * dst.front,
                     (uint8*)src.data + bytesPerSlice * src.front,
@@ -847,7 +893,7 @@ namespace Ogre {
         uint8 *basesrcptr = static_cast<uint8*>(box.data)
             + (box.left + box.top * box.rowPitch + box.front * box.slicePitch) * pixelSize;
         uint8 *basedstptr = basesrcptr + (box.bottom - box.top - 1) * rowPitchBytes;
-        uint8* tmpptr = (uint8*)OGRE_MALLOC_ALIGN(copySize, MEMCATEGORY_GENERAL, false);
+        uint8* tmpptr = (uint8*)OGRE_MALLOC_SIMD(copySize, MEMCATEGORY_GENERAL);
         
         // swap rows
         const size_t halfRowCount = (box.bottom - box.top) >> 1;
@@ -868,10 +914,10 @@ namespace Ogre {
             basedstptr += slicePitchBytes;
         }
         
-        OGRE_FREE_ALIGN(tmpptr, MEMCATEGORY_GENERAL, false);
+        OGRE_FREE_SIMD(tmpptr, MEMCATEGORY_GENERAL);
     }
 
-    ColourValue PixelBox::getColourAt(size_t x, size_t y, size_t z)
+    ColourValue PixelBox::getColourAt(size_t x, size_t y, size_t z) const
     {
         ColourValue cv;
 

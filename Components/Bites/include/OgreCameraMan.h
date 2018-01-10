@@ -56,14 +56,14 @@ namespace OgreBites
     class _OgreBitesExport CameraMan : public InputListener
     {
     public:
-        CameraMan(Ogre::Camera* cam);
+        CameraMan(Ogre::SceneNode* cam);
 
         /**
         Swaps the camera on our camera man for another camera.
         */
-        void setCamera(Ogre::Camera* cam);
+        void setCamera(Ogre::SceneNode* cam);
 
-        Ogre::Camera* getCamera()
+        Ogre::SceneNode* getCamera()
         {
             return mCamera;
         }
@@ -143,12 +143,13 @@ namespace OgreBites
         bool mouseReleased(const MouseButtonEvent& evt);
 
     protected:
+        Ogre::Real getDistToTarget();
 
-        Ogre::Camera* mCamera;
+        Ogre::SceneNode* mCamera;
         CameraStyle mStyle;
         Ogre::SceneNode* mTarget;
         bool mOrbiting;
-        bool mZooming;
+        bool mMoving;
         Ogre::Real mTopSpeed;
         Ogre::Vector3 mVelocity;
         bool mGoingForward;
@@ -158,6 +159,7 @@ namespace OgreBites
         bool mGoingUp;
         bool mGoingDown;
         bool mFastMove;
+        Ogre::Vector3 mOffset;
     };
 }
 /** @} */

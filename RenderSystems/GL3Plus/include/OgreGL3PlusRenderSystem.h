@@ -35,6 +35,7 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 #include "OgreGLSLShader.h"
 #include "OgreRenderWindow.h"
 #include "OgreGLRenderSystemCommon.h"
+#include "OgreGL3PlusStateCacheManager.h"
 
 namespace Ogre {
     /** \addtogroup RenderSystems RenderSystems
@@ -44,9 +45,9 @@ namespace Ogre {
     * Implementation of GL 3 as a rendering system.
     *  @{
     */
-    class GL3PlusSupport;
     class GLSLShaderManager;
     class GLSLShaderFactory;
+    class GLSLProgram;
     class HardwareBufferManager;
 
     /**
@@ -80,21 +81,21 @@ namespace Ogre {
         /// Store last scissor enable state
         bool mScissorsEnabled;
 
+        /// Store scissor box
+        int mScissorBox[4];
+
         /// Store last stencil mask state
         uint32 mStencilWriteMask;
 
         /// GL support class, used for creating windows etc.
         GL3PlusSupport *mGLSupport;
 
-        /* The main GL context - main thread only */
-        GL3PlusContext *mMainContext;
-
-        /* The current GL context  - main thread only */
-        GL3PlusContext *mCurrentContext;
-
         typedef list<GL3PlusContext*>::type GL3PlusContextList;
         /// List of background thread contexts
         GL3PlusContextList mBackgroundContextList;
+
+        // statecaches are per context
+        GL3PlusStateCacheManager* mStateCacheManager;
 
         GLSLShaderManager *mShaderManager;
         GLSLShaderFactory* mGLSLShaderFactory;
@@ -117,26 +118,10 @@ namespace Ogre {
         /// Check if the GL system has already been initialised
         bool mGLInitialised;
 
-        // check if GL 4.3 is supported
-        bool mHasGL43;
-
-        // check if GL 3.2 is supported
-        bool mHasGL32;
-
-        // local data members of _render that were moved here to improve performance
-        // (save allocations)
-        vector<GLuint>::type mRenderAttribsBound;
-        vector<GLuint>::type mRenderInstanceAttribsBound;
-
 #if OGRE_NO_QUAD_BUFFER_STEREO == 0
 		/// @copydoc RenderSystem::setDrawBuffer
 		virtual bool setDrawBuffer(ColourBufferType colourBuffer);
 #endif
-
-        /**
-            Cache the polygon mode value
-        */
-        GLenum mPolygonMode;
 
         GLint getCombinedMinMipFilter(void) const;
 
@@ -150,12 +135,9 @@ namespace Ogre {
         GLint getTextureAddressingMode(TextureUnitState::TextureAddressingMode tam) const;
         GLenum getBlendMode(SceneBlendFactor ogreBlend) const;
 
-        bool activateGLTextureUnit(size_t unit);
-        void bindVertexElementToGpu( const VertexElement &elem, HardwareVertexBufferSharedPtr vertexBuffer,
-                                     const size_t vertexStart,
-                                     vector<GLuint>::type &attribsBound,
-                                     vector<GLuint>::type &instanceAttribsBound,
-                                     bool updateVAO);
+        void bindVertexElementToGpu(const VertexElement& elem,
+                                    const HardwareVertexBufferSharedPtr& vertexBuffer,
+                                    const size_t vertexStart);
 
     public:
         // Default constructor / destructor
@@ -211,10 +193,6 @@ namespace Ogre {
 
         bool areFixedFunctionLightsInViewSpace() const { return true; }
 
-        void _setPointParameters(Real size, bool attenuationEnabled,
-                                 Real constant, Real linear, Real quadratic, Real minSize, Real maxSize);
-
-        void _setPointSpritesEnabled(bool enabled);
         /** See
          RenderSystem
          */
@@ -288,14 +266,6 @@ namespace Ogre {
 
         void _setTextureLayerAnisotropy(size_t unit, unsigned int maxAnisotropy);
 
-        void setVertexDeclaration(VertexDeclaration* decl) {}
-
-        void setVertexDeclaration(VertexDeclaration* decl, VertexBufferBinding* binding) {}
-        /** See
-            RenderSystem.
-        */
-        void setVertexBufferBinding(VertexBufferBinding* binding) {}
-
         void _render(const RenderOperation& op);
 
         void setScissorTest(bool enabled, size_t left = 0, size_t top = 0, size_t right = 800, size_t bottom = 600);
@@ -310,12 +280,24 @@ namespace Ogre {
         void preExtraThreadsStarted();
         void postExtraThreadsStarted();
         void setClipPlanesImpl(const Ogre::PlaneList& planeList);
+        GL3PlusSupport* getGLSupportRef() { return mGLSupport; }
+
 
         // ----------------------------------
         // GL3PlusRenderSystem specific members
         // ----------------------------------
-        /** Returns the main context */
-        GL3PlusContext* _getMainContext() { return mMainContext; }
+        bool hasMinGLVersion(int major, int minor) const;
+        bool checkExtension(const String& ext) const;
+
+        GL3PlusStateCacheManager * _getStateCacheManager() { return mStateCacheManager; }
+
+        /** Create VAO on current context */
+        uint32 _createVao();
+        /** Bind VAO, context should be equal to current context, as VAOs are not shared  */
+        void _bindVao(GLContext* context, uint32 vao);
+        /** Destroy VAO immediately or defer if it was created on other context */
+        void _destroyVao(GLContext* context, uint32 vao);
+
         /** Unregister a render target->context mapping. If the context of target
             is the current context, change the context to the main context so it
             can be destroyed safely.
@@ -353,11 +335,6 @@ namespace Ogre {
         void _setAlphaRejectSettings( CompareFunction func, unsigned char value, bool alphaToCoverage );
         /// @copydoc RenderSystem::getDisplayMonitorCount
         unsigned int getDisplayMonitorCount() const;
-
-        /// Internal method for anisotropy validation
-        GLfloat _getCurrentAnisotropy(size_t unit);
-
-        GLenum _getPolygonMode(void) { return mPolygonMode; }
 
         void _setSceneBlendingOperation(SceneBlendOperation op);
         void _setSeparateSceneBlendingOperation(SceneBlendOperation op, SceneBlendOperation alphaOp);

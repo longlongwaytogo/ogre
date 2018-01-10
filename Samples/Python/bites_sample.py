@@ -7,7 +7,6 @@ class SampleApp(OgreBites.ApplicationContext, OgreBites.InputListener):
     def __init__(self):
         OgreBites.ApplicationContext.__init__(self, "PySample", False)
         OgreBites.InputListener.__init__(self)
-        self.addInputListener(self)
 
     def keyPressed(self, evt):
         if evt.keysym.sym == OgreBites.SDLK_ESCAPE:
@@ -35,9 +34,10 @@ class SampleApp(OgreBites.ApplicationContext, OgreBites.InputListener):
 
     def setup(self):
         OgreBites.ApplicationContext.setup(self)
+        self.addInputListener(self)
 
         root = self.getRoot()
-        scn_mgr = root.createSceneManager(Ogre.ST_GENERIC)
+        scn_mgr = root.createSceneManager()
 
         shadergen = OgreRTShader.ShaderGenerator.getSingleton()
         shadergen.addSceneManager(scn_mgr)  # must be done before we do anything with the scene
@@ -54,13 +54,17 @@ class SampleApp(OgreBites.ApplicationContext, OgreBites.InputListener):
         scn_mgr.setAmbientLight(Ogre.ColourValue(.1, .1, .1))
 
         light = scn_mgr.createLight("MainLight")
-        light.setPosition(0, 10, 15)
+        lightnode = scn_mgr.getRootSceneNode().createChildSceneNode()
+        lightnode.setPosition(0, 10, 15)
+        lightnode.attachObject(light)
 
         cam = scn_mgr.createCamera("myCam")
         cam.setNearClipDistance(5)
         cam.setAutoAspectRatio(True)
+        camnode = scn_mgr.getRootSceneNode().createChildSceneNode()
+        camnode.attachObject(cam)
 
-        self.camman = OgreBites.CameraMan(cam)
+        self.camman = OgreBites.CameraMan(camnode)
         self.camman.setStyle(OgreBites.CS_ORBIT)
         self.camman.setYawPitchDist(Ogre.Radian(0), Ogre.Radian(0.3), 15)
         self.addInputListener(self.camman)

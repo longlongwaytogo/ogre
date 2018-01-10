@@ -51,7 +51,7 @@ namespace Ogre {
 		iend = mProfiles.end();
 		GpuProgramManager& gpuMgr = GpuProgramManager::getSingleton();
 		bool useDelegate = false;
-		bool foundProfile = false;
+
 		for (i = mProfiles.begin(); i != iend; ++i)
 		{
 			bool syntaxSupported = gpuMgr.isSyntaxSupported(*i);
@@ -86,7 +86,7 @@ namespace Ogre {
 					"Unable to find CG profile enum for program " + mName + ": ", mCgContext);
 				
 				// do we need a delegate?
-				if (useDelegate && mDelegate)
+				if (useDelegate && !mDelegate)
 				{
 					mDelegate =
 						HighLevelGpuProgramManager::getSingleton().createProgram(
@@ -105,22 +105,16 @@ namespace Ogre {
 					mDelegate.reset();
 				}
 				
-				foundProfile = true;
 				break;
 			}
-		}
-
-		if (!foundProfile)
-		{
-			LogManager::getSingleton().logMessage(String("Error: ") + mName +  "'s syntax is not supported", LML_CRITICAL);
 		}
 	}
 	//-----------------------------------------------------------------------
 	void CgProgram::buildArgs(void)
 	{
 		StringVector args;
-		if (!mCompileArgs.empty())
-			args = StringUtil::split(mCompileArgs);
+		if (!mPreprocessorDefines.empty())
+			args = StringUtil::split(mPreprocessorDefines);
 
 		StringVector::const_iterator i;
 		if (mSelectedCgProfile == CG_PROFILE_VS_1_1)
@@ -735,11 +729,15 @@ namespace Ogre {
 		// Cg logs its renamings in the comments at the beginning of the
 		// processed source file. We can get them from there.
 		// We'll also get rid of those comments to trim down source code size.
+#if OGRE_DEBUG_MODE
 		LogManager::getSingleton().stream() << "Cg high level output for " << getName() << ":\n" << hlSource;
+#endif
 		hlSource = HighLevelOutputFixer(hlSource, mParametersMap, mSamplerRegisterMap, 
 			mSelectedCgProfile == CG_PROFILE_GLSLV || mSelectedCgProfile == CG_PROFILE_GLSLF || 
 			mSelectedCgProfile == CG_PROFILE_GLSLG).output;
+#if OGRE_DEBUG_MODE
 		LogManager::getSingleton().stream() << "Cleaned high level output for " << getName() << ":\n" << hlSource;
+#endif
 	}
 
 
@@ -879,6 +877,11 @@ namespace Ogre {
 	//-----------------------------------------------------------------------
 	void CgProgram::unloadHighLevelImpl(void)
 	{
+        if (mDelegate)
+        {
+            mDelegate->getCreator()->remove(mDelegate);
+            mDelegate.reset();
+        }
 	}
 	//-----------------------------------------------------------------------
 	void CgProgram::buildConstantDefinitions() const
@@ -1408,11 +1411,11 @@ namespace Ogre {
 	//-----------------------------------------------------------------------
 	String CgProgram::CmdArgs::doGet(const void *target) const
 	{
-		return static_cast<const CgProgram*>(target)->getCompileArguments();
+		return static_cast<const CgProgram*>(target)->getPreprocessorDefines();
 	}
 	void CgProgram::CmdArgs::doSet(void *target, const String& val)
 	{
-		static_cast<CgProgram*>(target)->setCompileArguments(val);
+		static_cast<CgProgram*>(target)->setPreprocessorDefines(val);
 	}
 
 }

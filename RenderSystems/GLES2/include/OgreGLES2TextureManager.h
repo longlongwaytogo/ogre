@@ -39,10 +39,8 @@ namespace Ogre {
     class _OgreGLES2Export GLES2TextureManager : public TextureManager
     {
         public:
-            GLES2TextureManager(GLES2Support& support);
+            GLES2TextureManager(GLES2RenderSystem* renderSystem);
             virtual ~GLES2TextureManager();
-
-            GLuint getWarningTextureID() { return mWarningTextureID; }
 
             /// @copydoc TextureManager::getNativeFormat
             PixelFormat getNativeFormat(TextureType ttype, PixelFormat format, int usage);
@@ -58,11 +56,7 @@ namespace Ogre {
                              const String& group, bool isManual, ManualResourceLoader* loader, 
                              const NameValuePairList* createParams);
         
-        /// Internal method to create a warning texture (bound when a texture unit is blank)
-        void createWarningTexture();
-        
-        GLES2Support& mGLSupport;
-        GLuint mWarningTextureID;
+        GLES2RenderSystem* mRenderSystem;
     };
 }
 

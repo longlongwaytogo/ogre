@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 #include "OgrePrerequisites.h"
 #include "OgreIteratorWrappers.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
     /** \addtogroup Core
@@ -125,18 +126,26 @@ namespace Ogre {
         */
         void removePass(size_t idx);
         /** Get a pass.
+        @deprecated use getPasses()
         */
-        CompositionPass *getPass(size_t idx);
+        OGRE_DEPRECATED CompositionPass *getPass(size_t idx);
         /** Get the number of passes.
+        @deprecated use getPasses()
         */
-        size_t getNumPasses();
+        OGRE_DEPRECATED size_t getNumPasses();
         
+        /// Get the Passes in this TargetPass
+        const Passes& getPasses() const {
+            return mPasses;
+        }
+
         /** Remove all passes
         */
         void removeAllPasses();
     
-        /** Get an iterator over the Passes in this TargetPass. */
-        PassIterator getPassIterator(void);
+        /** Get an iterator over the Passes in this TargetPass.
+        @deprecated use getPasses() */
+        OGRE_DEPRECATED PassIterator getPassIterator(void);
         
         /** Get parent object */
         CompositionTechnique *getParent();
@@ -171,5 +180,6 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "OgrePrerequisites.h"
 #include "OgreScriptCompiler.h"
 #include "OgreScriptLexer.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -56,5 +57,6 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

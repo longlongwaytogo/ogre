@@ -33,6 +33,8 @@
 #include "OgreRenderOperation.h"
 
 namespace Ogre {
+
+        class GLUniformCache;
     /** Specialisation of HighLevelGpuProgram to encapsulate shader
         objects obtained from compiled shaders written in the OpenGL
         Shader Language (GLSL).

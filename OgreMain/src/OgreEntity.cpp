@@ -345,7 +345,7 @@ namespace Ogre {
         return mMesh;
     }
     //-----------------------------------------------------------------------
-    SubEntity* Entity::getSubEntity(unsigned int index) const
+    SubEntity* Entity::getSubEntity(size_t index) const
     {
         if (index >= mSubEntityList.size())
             OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS,
@@ -360,9 +360,9 @@ namespace Ogre {
         return getSubEntity(index);
     }
     //-----------------------------------------------------------------------
-    unsigned int Entity::getNumSubEntities(void) const
+    size_t Entity::getNumSubEntities(void) const
     {
-        return static_cast< unsigned int >( mSubEntityList.size() );
+        return mSubEntityList.size();
     }
     //-----------------------------------------------------------------------
     Entity* Entity::clone( const String& newName) const
@@ -2001,7 +2001,7 @@ namespace Ogre {
                     AnimationStateSet* targetState = mLodEntityList[mMeshLodIndex-1]->mAnimationState;
                     if (mAnimationState != targetState) // only copy if lods have different skeleton instances
                     {
-                        if (mAnimationState->getDirtyFrameNumber() != targetState->getDirtyFrameNumber()) // only copy if animation was updated
+                        if (mAnimationState && mAnimationState->getDirtyFrameNumber() != targetState->getDirtyFrameNumber()) // only copy if animation was updated
                             mAnimationState->copyMatchingState(targetState);
                     }
                 }
@@ -2544,7 +2544,7 @@ namespace Ogre {
             e != mLodEntityList.end(); ++e, ++lodi)
         {
             if(*e != this) {
-                uint nsub = (*e)->getNumSubEntities();
+                size_t nsub = (*e)->getNumSubEntities();
                 for (uint s = 0; s < nsub; ++s)
                 {
                     visitor->visit((*e)->getSubEntity(s), lodi, false);

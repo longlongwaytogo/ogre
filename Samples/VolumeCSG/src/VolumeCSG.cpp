@@ -96,11 +96,12 @@ void Sample_VolumeCSG::setupContent(void)
 
     mVolumeRoot->load(volumeRootNode, Vector3::ZERO, to, 1, &parameters);
 
-    mVolumeRoot->setMaterial("Ogre/RTShader/TriplanarTexturing");
+    MaterialPtr mat = MaterialManager::getSingleton().getByName("Ogre/RTShader/TriplanarTexturing", "General");
+    mVolumeRoot->setMaterial(mat);
 
     // Camera
-    mCamera->setPosition(to + (Real)7.5);
-    mCamera->lookAt(center + (Real)11.0);
+    mCameraNode->setPosition(to + (Real)7.5);
+    mCameraNode->lookAt(center + (Real)11.0, Node::TS_PARENT);
     mCamera->setNearClipDistance((Real)0.5);
 
     mRotation = (Real)0.0;
@@ -112,9 +113,6 @@ void Sample_VolumeCSG::setupContent(void)
 void Sample_VolumeCSG::setupControls(void)
 {
     mTrayMgr->showCursor();
-#if OGRE_PLATFORM != OGRE_PLATFORM_APPLE_IOS
-        setDragLook(true);
-#endif
     mCameraMan->setStyle(OgreBites::CS_MANUAL);
     mCameraMan->setTopSpeed((Real)25.0);
     // make room for the volume
@@ -182,12 +180,12 @@ bool Sample_VolumeCSG::frameRenderingQueued(const Ogre::FrameEvent& evt)
     Vector3 center((Real)15.5, (Real)5.5, (Real)15.5);
     mRotation += Radian(evt.timeSinceLastFrame * (Real)0.5);
     Real r = (Real)35.0;
-    mCamera->setPosition(
+    mCameraNode->setPosition(
         Math::Sin(mRotation) * r + center.x,
         (Real)15.0 + center.y,
         Math::Cos(mRotation) * r + center.z
     );
-    mCamera->lookAt(center);
+    mCameraNode->lookAt(center, Node::TS_PARENT);
     return SdkSample::frameRenderingQueued(evt);
 }
 
@@ -210,6 +208,9 @@ static SamplePlugin* sp;
 static Sample* s;
     
 //-----------------------------------------------------------------------
+
+extern "C" void _OgreSampleExport dllStartPlugin(void);
+extern "C" void _OgreSampleExport dllStopPlugin(void);
 
 extern "C" _OgreSampleExport void dllStartPlugin()
 {

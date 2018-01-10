@@ -172,10 +172,9 @@ bool HardwareSkinning::preAddToRenderState(const RenderState* renderState, Pass*
     Technique* pFirstTech = srcPass->getParent()->getParent()->getTechnique(0);
     const Any& hsAny = pFirstTech->getUserObjectBindings().getUserAny(HS_DATA_BIND_NAME);
 
-    if (hsAny.isEmpty() == false)
+    if (hsAny.has_value())
     {
-        HardwareSkinning::SkinningData pData =
-            (any_cast<HardwareSkinning::SkinningData>(hsAny));
+        HardwareSkinning::SkinningData pData = any_cast<HardwareSkinning::SkinningData>(hsAny);
         isValid = pData.isValid;
         
         //If the skinning data is being passed through the material, we need to create an instance of the appropriate
@@ -246,6 +245,8 @@ HardwareSkinningFactory::HardwareSkinningFactory() :
 {
 
 }
+
+HardwareSkinningFactory::~HardwareSkinningFactory() {}
 
 //-----------------------------------------------------------------------
 const String& HardwareSkinningFactory::getType() const
@@ -429,8 +430,8 @@ void HardwareSkinningFactory::prepareEntityForSkinning(const Entity* pEntity, Sk
             const Entity* pCurEntity = pEntity;
             if (indexLod > 0) pCurEntity = pEntity->getManualLodLevel(indexLod - 1);
 
-            unsigned int numSubEntities = pCurEntity->getNumSubEntities();
-            for(unsigned int indexSub = 0 ; indexSub < numSubEntities ; ++indexSub)
+            size_t numSubEntities = pCurEntity->getNumSubEntities();
+            for(size_t indexSub = 0 ; indexSub < numSubEntities ; ++indexSub)
             {
                 ushort boneCount = 0,weightCount = 0;
                 bool isValid = extractSkeletonData(pCurEntity, indexSub, boneCount, weightCount);
@@ -444,7 +445,7 @@ void HardwareSkinningFactory::prepareEntityForSkinning(const Entity* pEntity, Sk
 }
 
 //-----------------------------------------------------------------------
-bool HardwareSkinningFactory::extractSkeletonData(const Entity* pEntity, unsigned int subEntityIndex, ushort& boneCount, ushort& weightCount)
+bool HardwareSkinningFactory::extractSkeletonData(const Entity* pEntity, size_t subEntityIndex, ushort& boneCount, ushort& weightCount)
 {
     bool isValidData = false;
     boneCount = 0;
@@ -476,11 +477,24 @@ bool HardwareSkinningFactory::extractSkeletonData(const Entity* pEntity, unsigne
             isValidData = true;
             switch (pDeclWeights->getType())
             {
-            case VET_FLOAT1: weightCount = 1; break;
-            case VET_FLOAT2: weightCount = 2; break;
-            case VET_FLOAT3: weightCount = 3; break;
-            case VET_FLOAT4: weightCount = 4; break;
-            default: isValidData = false; 
+            case VET_FLOAT1:
+                weightCount = 1;
+                break;
+            case VET_USHORT2_NORM:
+            case VET_FLOAT2:
+                weightCount = 2;
+                break;
+            case VET_FLOAT3:
+                weightCount = 3;
+                break;
+            case VET_USHORT4_NORM:
+            case VET_UBYTE4_NORM:
+            case VET_FLOAT4:
+                weightCount = 4;
+                break;
+            default:
+                isValidData = false;
+                break;
             }
         }
     }
@@ -499,9 +513,9 @@ bool HardwareSkinningFactory::imprintSkeletonData(const MaterialPtr& pMaterial, 
         //get the previous skinning data if available
         UserObjectBindings& binding = pMaterial->getTechnique(0)->getUserObjectBindings();
         const Any& hsAny = binding.getUserAny(HS_DATA_BIND_NAME);
-        if (hsAny.isEmpty() == false)
+        if (hsAny.has_value())
         {
-            data = (any_cast<HardwareSkinning::SkinningData>(hsAny));
+            data = any_cast<HardwareSkinning::SkinningData>(hsAny);
         }
 
         //check if we need to update the data

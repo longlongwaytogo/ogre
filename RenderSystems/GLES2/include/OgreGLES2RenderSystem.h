@@ -44,10 +44,9 @@ namespace Ogre {
     * Implementation of GL ES 2.x as a rendering system.
     *  @{
     */
-    class GLES2Support;
     class GLRTTManager;
-    typedef GLRTTManager GLES2RTTManager;
     class GLES2GpuProgramManager;
+    class GLSLESProgramCommon;
     class GLSLESProgramFactory;
     class GLES2StateCacheManager;
 #if !OGRE_NO_GLES2_CG_SUPPORT
@@ -76,16 +75,10 @@ namespace Ogre {
 
             /// State cache manager which responsible to reduce redundant state changes
             GLES2StateCacheManager* mStateCacheManager;
-            
-            /* The main GL context - main thread only */
-            GLES2Context *mMainContext;
 
-            /* The current GL context  - main thread only */
-            GLES2Context *mCurrentContext;
-
-            typedef list<GLES2Context*>::type GLES2ContextList;
+            typedef list<GLContext*>::type GLContextList;
             /// List of background thread contexts
-            GLES2ContextList mBackgroundContextList;
+            GLContextList mBackgroundContextList;
 
             GLES2GpuProgramManager *mGpuProgramManager;
             GLSLESProgramFactory* mGLSLESProgramFactory;
@@ -99,18 +92,17 @@ namespace Ogre {
                 to pbuffers, which depend on the GL support used and are generally 
                 unwieldy and slow. However, FBO support for stencil buffers is poor.
               */
-            GLES2RTTManager *mRTTManager;
+            GLRTTManager *mRTTManager;
 
             /// Check if the GL system has already been initialised
             bool mGLInitialised;
-
-            // check if GLES 3.0 is supported
-            bool mHasGLES30;
 
             // local data member of _render that were moved here to improve performance
             // (save allocations)
             vector<GLuint>::type mRenderAttribsBound;
             vector<GLuint>::type mRenderInstanceAttribsBound;
+
+            GLenum mPolygonMode;
 
             GLint getCombinedMinMipFilter(void) const;
 
@@ -119,16 +111,15 @@ namespace Ogre {
 
             GLint getTextureAddressingMode(TextureUnitState::TextureAddressingMode tam) const;
             GLenum getBlendMode(SceneBlendFactor ogreBlend) const;
-            void bindVertexElementToGpu( const VertexElement &elem, HardwareVertexBufferSharedPtr vertexBuffer,
-                                        const size_t vertexStart,
-                                        vector<GLuint>::type &attribsBound,
-                                        vector<GLuint>::type &instanceAttribsBound,
-                                        bool updateVAO);
+            void bindVertexElementToGpu(const VertexElement& elem,
+                                        const HardwareVertexBufferSharedPtr& vertexBuffer,
+                                        const size_t vertexStart);
 
             // Mipmap count of the actual bounded texture
             size_t mCurTexMipCount;
-            GLint mViewport[4];
-            GLint mScissor[4];
+        
+            // Store scissor box
+            GLint mScissorBox[4];
 
         public:
             // Default constructor / destructor
@@ -179,11 +170,6 @@ namespace Ogre {
             // -----------------------------
 
             bool areFixedFunctionLightsInViewSpace() const { return true; }
-
-            void _setPointParameters(Real size, bool attenuationEnabled,
-                                     Real constant, Real linear, Real quadratic, Real minSize, Real maxSize) {}
-
-            void _setPointSpritesEnabled(bool enabled) {}
 
             void _setTexture(size_t unit, bool enabled, const TexturePtr &tex);
 
@@ -240,12 +226,6 @@ namespace Ogre {
 
             virtual bool hasAnisotropicMipMapFilter() const { return false; }   
 
-            void setVertexDeclaration(VertexDeclaration* decl);
-
-            void setVertexDeclaration(VertexDeclaration* decl, VertexBufferBinding* binding);
-
-            void setVertexBufferBinding(VertexBufferBinding* binding) {}
-
             void _render(const RenderOperation& op);
 
             void setScissorTest(bool enabled, size_t left = 0, size_t top = 0, size_t right = 800, size_t bottom = 600);
@@ -265,19 +245,31 @@ namespace Ogre {
             // ----------------------------------
             // GLES2RenderSystem specific members
             // ----------------------------------
-            /** Returns the main context */
-            GLES2Context* _getMainContext() { return mMainContext; }
+            bool hasMinGLVersion(int major, int minor) const;
+            bool checkExtension(const String& ext) const;
+        
+            GLES2StateCacheManager * _getStateCacheManager() { return mStateCacheManager; }
+        
+            /** Create VAO on current context */
+            uint32 _createVao();
+            /** Bind VAO, context should be equal to current context, as VAOs are not shared  */
+            void _bindVao(GLContext* context, uint32 vao);
+            /** Destroy VAO immediately or defer if it was created on other context */
+            void _destroyVao(GLContext* context, uint32 vao);
+            /** Destroy FBO immediately or defer if it was created on other context */
+            void _destroyFbo(GLContext* context, uint32 fbo);
+
             /** Unregister a render target->context mapping. If the context of target 
              is the current context, change the context to the main context so it
              can be destroyed safely. 
              
              @note This is automatically called by the destructor of 
-             GLES2Context.
+             GLContext.
              */
-            void _unregisterContext(GLES2Context *context);
+            void _unregisterContext(GLContext *context);
             /** Switch GL context, dealing with involved internal cached states too
              */
-            void _switchContext(GLES2Context *context);
+            void _switchContext(GLContext *context);
             /** One time initialization for the RenderState of a context. Things that
              only need to be set once, like the LightingModel can be defined here.
              */
@@ -288,7 +280,6 @@ namespace Ogre {
              */
             void _setRenderTarget(RenderTarget *target);
 
-            GLES2Support* getGLES2Support() { return mGLSupport; }
             GLint convertCompareFunction(CompareFunction func) const;
             GLint convertStencilOp(StencilOperation op, bool invert = false) const;
 
@@ -306,13 +297,8 @@ namespace Ogre {
             /// @copydoc RenderSystem::getDisplayMonitorCount
             unsigned int getDisplayMonitorCount() const;
 
-            /// Internal method for anisotropy validation
-            GLfloat _getCurrentAnisotropy(size_t unit);
-
             void _setSceneBlendingOperation(SceneBlendOperation op);
             void _setSeparateSceneBlendingOperation(SceneBlendOperation op, SceneBlendOperation alphaOp);
-
-            unsigned int getDiscardBuffers(void);
 
             void _destroyDepthBuffer(RenderTarget* pRenderWnd);
         

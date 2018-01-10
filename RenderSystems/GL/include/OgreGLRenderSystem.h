@@ -36,6 +36,7 @@ THE SOFTWARE.
 #include "OgreVector4.h"
 
 #include "OgreGLRenderSystemCommon.h"
+#include "OgreGLStateCacheManager.h"
 
 namespace Ogre {
     /** \addtogroup RenderSystems RenderSystems
@@ -49,8 +50,6 @@ namespace Ogre {
     namespace GLSL {
         class GLSLProgramFactory;
     }
-
-    class GLStateCacheManager;
 
     /**
       Implementation of GL as a rendering system.
@@ -110,9 +109,6 @@ namespace Ogre {
 
         GLint convertCompareFunction(CompareFunction func) const;
         GLint convertStencilOp(StencilOperation op, bool invert = false) const;
-
-        /// Internal method for anisotropy validation
-        GLfloat _getCurrentAnisotropy(size_t unit);
         
         /// GL support class, used for creating windows etc.
         GLSupport* mGLSupport;
@@ -138,17 +134,11 @@ namespace Ogre {
         GLGpuProgram* mCurrentFragmentProgram;
         GLGpuProgram* mCurrentGeometryProgram;
 
-        /* The main GL context - main thread only */
-        GLContext *mMainContext;
-        /* The current GL context  - main thread only */
-        GLContext *mCurrentContext;
         typedef list<GLContext*>::type GLContextList;
         /// List of background thread contexts
         GLContextList mBackgroundContextList;
 
         // statecaches are per context
-        typedef map<GLContext*, GLStateCacheManager>::type CachesMap;
-        CachesMap mCaches;
         GLStateCacheManager* mStateCacheManager;
 
         /** Manager object for creating render textures.
@@ -173,20 +163,9 @@ namespace Ogre {
 
     protected:
         void setClipPlanesImpl(const PlaneList& clipPlanes);
-        void bindVertexElementToGpu( const VertexElement &elem, HardwareVertexBufferSharedPtr vertexBuffer,
-                const size_t vertexStart, 
-                vector<GLuint>::type &attribsBound, vector<GLuint>::type &instanceAttribsBound );
-
-        /**
-         * GL state is tracked per context, so call this function to drop all
-         * recorded state for a given context before you destroy it.
-         */
-        void unregisterContextCache (GLContext* id);
-
-        /**
-         * @param id new context to switch to for state tracking
-         */
-        void switchContextCache (GLContext* id);
+        void bindVertexElementToGpu(const VertexElement& elem,
+                                    const HardwareVertexBufferSharedPtr& vertexBuffer,
+                                    const size_t vertexStart);
     public:
         // Default constructor / destructor
         GLRenderSystem();
@@ -351,10 +330,6 @@ namespace Ogre {
 
         void _setTextureLayerAnisotropy(size_t unit, unsigned int maxAnisotropy);
 
-        void setVertexDeclaration(VertexDeclaration* decl);
-
-        void setVertexBufferBinding(VertexBufferBinding* binding);
-
         void _render(const RenderOperation& op);
 
         void bindGpuProgram(GpuProgram* prg);
@@ -402,8 +377,8 @@ namespace Ogre {
             GLContext.
          */
         void _unregisterContext(GLContext *context);
-        /** Returns the main context */
-        GLContext* _getMainContext() {return mMainContext;} 
+
+        GLStateCacheManager * _getStateCacheManager() { return mStateCacheManager; }
 
         /// @copydoc RenderSystem::getDisplayMonitorCount
         unsigned int getDisplayMonitorCount() const;

@@ -37,6 +37,7 @@ THE SOFTWARE.
 #include "OgreHardwareUniformBuffer.h"
 #include "OgreHardwareVertexBuffer.h"
 #include "Threading/OgreThreadHeaders.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
     /** \addtogroup Core
@@ -111,8 +112,6 @@ namespace Ogre {
     */
     class _OgreExport HardwareBufferManagerBase : public BufferAlloc
     {
-        friend class HardwareVertexBufferSharedPtr;
-        friend class HardwareIndexBufferSharedPtr;
     protected:
         /** WARNING: The following two members should place before all other members.
             Members destruct order is very important here, because destructing other
@@ -427,8 +426,6 @@ namespace Ogre {
     /** Singleton wrapper for hardware buffer manager. */
     class _OgreExport HardwareBufferManager : public HardwareBufferManagerBase, public Singleton<HardwareBufferManager>
     {
-        friend class HardwareVertexBufferSharedPtr;
-        friend class HardwareIndexBufferSharedPtr;
     protected:
         HardwareBufferManagerBase* mImpl;
     public:
@@ -573,6 +570,7 @@ namespace Ogre {
     /** @} */
 } // namespace Ogre
 
+#include "OgreHeaderSuffix.h"
 
 #endif // __HardwareBufferManager__
 

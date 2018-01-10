@@ -81,7 +81,7 @@ namespace Ogre {
 
         using ResourceManager::createOrRetrieve;
 
-        /** @overload ResourceManager::createOrRetrieve
+        /** @overload createOrRetrieve
 
             @param
                 texType The type of texture to load/create, defaults to normal 2D textures
@@ -367,6 +367,7 @@ namespace Ogre {
             channels or packing the channels differently, without it making and qualitative 
             differences to the texture. If you want to just detect whether the quality of a
             given texture will be reduced, use isEquivalentFormatSupport instead.
+        @param ttype The type of texture
         @param format The pixel format requested
         @param usage The kind of usage this texture is intended for, a combination of 
             the TextureUsage flags.
@@ -434,14 +435,17 @@ namespace Ogre {
             @note
                 The default value is 0.
         */
-        virtual void setDefaultNumMipmaps(size_t num);
+        virtual void setDefaultNumMipmaps(uint32 num);
 
         /** Gets the default number of mipmaps to be used for loaded textures.
         */
-        virtual size_t getDefaultNumMipmaps()
+        virtual uint32 getDefaultNumMipmaps()
         {
             return mDefaultNumMipmaps;
         }
+
+        /// Internal method to create a warning texture (bound when a texture unit is blank)
+        const TexturePtr& _getWarningTexture();
 
         /// @copydoc Singleton::getSingleton()
         static TextureManager& getSingleton(void);
@@ -452,7 +456,8 @@ namespace Ogre {
 
         ushort mPreferredIntegerBitDepth;
         ushort mPreferredFloatBitDepth;
-        size_t mDefaultNumMipmaps;
+        uint32 mDefaultNumMipmaps;
+        TexturePtr mWarningTexture;
     };
     /** @} */
     /** @} */

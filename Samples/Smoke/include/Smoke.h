@@ -37,10 +37,10 @@ protected:
         // dim orange ambient and two bright orange lights to match the skybox
         mSceneMgr->setAmbientLight(ColourValue(0.3, 0.2, 0));
         Light* light = mSceneMgr->createLight();
-        light->setPosition(2000, 1000, -1000);
+        mSceneMgr->getRootSceneNode()->createChildSceneNode(Vector3(2000, 1000, -1000))->attachObject(light);
         light->setDiffuseColour(1, 0.5, 0);
         light = mSceneMgr->createLight();
-        light->setPosition(-2000, 1000, 1000);
+        mSceneMgr->getRootSceneNode()->createChildSceneNode(Vector3(-2000, 1000, 1000))->attachObject(light);
         light->setDiffuseColour(1, 0.5, 0);
 
         mPivot = mSceneMgr->getRootSceneNode()->createChildSceneNode();  // create a pivot node
@@ -50,7 +50,7 @@ protected:
         headNode->attachObject(mSceneMgr->createEntity("Head", "ogrehead.mesh"));
         headNode->attachObject(mSceneMgr->createParticleSystem("Smoke", "Examples/Smoke"));
 
-        mCamera->setPosition(0, 30, 350);
+        mCameraNode->setPosition(0, 30, 350);
     }
 
     SceneNode* mPivot;

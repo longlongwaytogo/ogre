@@ -24,7 +24,9 @@ protected:
     {     
         // setup some basic lighting for our scene
         mSceneMgr->setAmbientLight(ColourValue(0.3, 0.3, 0.3));
-        mSceneMgr->createLight()->setPosition(20, 80, 50);
+        mSceneMgr->getRootSceneNode()
+            ->createChildSceneNode(Vector3(20, 80, 50))
+            ->attachObject(mSceneMgr->createLight());
         
         // create a skyplane 5000 units away, facing down, 10000 square units large, with 3x texture tiling
         mSceneMgr->setSkyPlane(true, Plane(0, -1, 0, 5000), "Examples/SpaceSkyPlane", 10000, 3);
@@ -33,8 +35,8 @@ protected:
         mSceneMgr->getRootSceneNode()->attachObject(mSceneMgr->createEntity("Dragon", "dragon.mesh"));
 
         // turn around and look at the DRAGON!
-        mCamera->yaw(Degree(210));
-        mCamera->pitch(Degree(-10));
+        mCameraNode->yaw(Degree(210));
+        mCameraNode->pitch(Degree(-10));
     }
 };
 

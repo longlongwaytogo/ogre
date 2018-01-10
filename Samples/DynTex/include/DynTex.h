@@ -85,11 +85,13 @@ protected:
 
         // setup some basic lighting for our scene
         mSceneMgr->setAmbientLight(ColourValue(0.5, 0.5, 0.5));
-        mSceneMgr->createLight()->setPosition(20, 80, 50);
+        mSceneMgr->getRootSceneNode()
+            ->createChildSceneNode(Vector3(20, 80, 50))
+            ->attachObject(mSceneMgr->createLight());
 
         // set initial camera position
         mCameraMan->setStyle(CS_MANUAL);
-        mCamera->setPosition(0, 0, 200);
+        mCameraNode->setPosition(0, 0, 200);
 
         mTrayMgr->showCursor();
 
@@ -100,10 +102,8 @@ protected:
         mTexBuf = tex->getBuffer();  // save off the texture buffer
 
         // initialise the texture to have full luminance
-        mConstantTexBuf = new uint8[mTexBuf->getSizeInBytes()];
-        memset(mConstantTexBuf, 0xff, mTexBuf->getSizeInBytes());
-        memcpy(mTexBuf->lock(HardwareBuffer::HBL_DISCARD), mConstantTexBuf, TEXTURE_SIZE * TEXTURE_SIZE);
-        mTexBuf->unlock();
+        mConstantTexBuf.resize(mTexBuf->getSizeInBytes(), 0xff);
+        mTexBuf->writeData(0, mConstantTexBuf.size(), &mConstantTexBuf[0]);
 
         // create a penguin and attach him to our penguin node
         Entity* penguin = mSceneMgr->createEntity("Penguin", "penguin.mesh");
@@ -137,7 +137,7 @@ protected:
     void updateTexture(uint8 freezeAmount)
     {
         // get access to raw texel data
-        uint8* data = mConstantTexBuf;
+        uint8* data = &mConstantTexBuf[0];
 
         uint8 temperature;
         Real sqrDistToBrush;
@@ -167,13 +167,11 @@ protected:
             }
         }
 
-        memcpy(mTexBuf->lock(HardwareBuffer::HBL_DISCARD), mConstantTexBuf, TEXTURE_SIZE * TEXTURE_SIZE);
-        mTexBuf->unlock();
+        mTexBuf->writeData(0, mConstantTexBuf.size(), &mConstantTexBuf[0]);
     }
 
     void cleanupContent()
     {
-        delete [] mConstantTexBuf;
         TextureManager::getSingleton().remove("thaw", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
         mSceneMgr->destroyQuery(mCursorQuery);
     }
@@ -181,7 +179,7 @@ protected:
     const unsigned int TEXTURE_SIZE;
     const unsigned int SQR_BRUSH_RADIUS;
     HardwarePixelBufferSharedPtr mTexBuf;
-    uint8* mConstantTexBuf;
+    vector<uint8>::type mConstantTexBuf;
     Real mPlaneSize;
     RaySceneQuery* mCursorQuery;
     Vector2 mBrushPos;

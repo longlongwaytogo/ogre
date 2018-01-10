@@ -32,15 +32,16 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 #include "OgreLogManager.h"
 #include "OgreGL3PlusHardwarePixelBuffer.h"
 #include "OgreGL3PlusFBOMultiRenderTarget.h"
-#include "OgreGL3PlusSupport.h"
+#include "OgreGL3PlusRenderSystem.h"
+#include "OgreGL3PlusStateCacheManager.h"
 
 namespace Ogre {
     static const size_t TEMP_FBOS = 2;
 
     GL3PlusFBORenderTexture::GL3PlusFBORenderTexture(
         GL3PlusFBOManager *manager, const String &name,
-        const GL3PlusSurfaceDesc &target, bool writeGamma, uint fsaa):
-        GL3PlusRenderTexture(name, target, writeGamma, fsaa),
+        const GLSurfaceDesc &target, bool writeGamma, uint fsaa):
+        GLRenderTexture(name, target, writeGamma, fsaa),
         mFB(manager, fsaa)
     {
         // Bind target to surface 0 and initialise
@@ -53,7 +54,7 @@ namespace Ogre {
 
     void GL3PlusFBORenderTexture::getCustomAttribute(const String& name, void* pData)
     {
-        if(name == GL3PlusRenderTexture::CustomAttributeString_FBO)
+        if(name == GLRenderTexture::CustomAttributeString_FBO)
         {
             *static_cast<GL3PlusFrameBufferObject **>(pData) = &mFB;
         }
@@ -75,7 +76,7 @@ namespace Ogre {
     bool GL3PlusFBORenderTexture::attachDepthBuffer( DepthBuffer *depthBuffer )
     {
         bool result;
-        if( (result = GL3PlusRenderTexture::attachDepthBuffer( depthBuffer )) )
+        if( (result = GLRenderTexture::attachDepthBuffer( depthBuffer )) )
             mFB.attachDepthBuffer( depthBuffer );
 
         return result;
@@ -84,13 +85,13 @@ namespace Ogre {
     void GL3PlusFBORenderTexture::detachDepthBuffer()
     {
         mFB.detachDepthBuffer();
-        GL3PlusRenderTexture::detachDepthBuffer();
+        GLRenderTexture::detachDepthBuffer();
     }
 
     void GL3PlusFBORenderTexture::_detachDepthBuffer()
     {
         mFB.detachDepthBuffer();
-        GL3PlusRenderTexture::_detachDepthBuffer();
+        GLRenderTexture::_detachDepthBuffer();
     }
 
     // Size of probe texture
@@ -127,7 +128,7 @@ namespace Ogre {
         };
 #define DEPTHFORMAT_COUNT (sizeof(depthFormats)/sizeof(GLenum))
 
-    GL3PlusFBOManager::GL3PlusFBOManager(const GL3PlusSupport& support) : mGLSupport(support)
+    GL3PlusFBOManager::GL3PlusFBOManager(GL3PlusRenderSystem* renderSystem) : mRenderSystem(renderSystem)
     {
         detectFBOFormats();
 
@@ -143,27 +144,36 @@ namespace Ogre {
     {
         if(!mRenderBufferMap.empty())
         {
-            LogManager::getSingleton().logMessage("GL: Warning! GL3PlusFBOManager destructor called, but not all renderbuffers were released.", LML_CRITICAL);
+            LogManager::getSingleton().logWarning("GL3PlusFBOManager destructor called, but not all renderbuffers were released.");
         }
 
-        for (size_t i = 0; i < Ogre::TEMP_FBOS; i++)
+        if(GL3PlusStateCacheManager* stateCacheManager = mRenderSystem->_getStateCacheManager())
         {
-            OGRE_CHECK_GL_ERROR(glDeleteFramebuffers(1, &mTempFBO[i]));
+            for (size_t i = 0; i < Ogre::TEMP_FBOS; i++)
+                stateCacheManager->deleteGLFrameBuffer(GL_FRAMEBUFFER,mTempFBO[i]);
         }
+    }
+
+    GL3PlusStateCacheManager* GL3PlusFBOManager::getStateCacheManager()
+    {
+        return mRenderSystem->_getStateCacheManager();
     }
 
     void GL3PlusFBOManager::_createTempFramebuffer(int ogreFormat, GLuint internalFormat, GLuint fmt, GLenum dataType, GLuint &fb, GLuint &tid)
     {
         OGRE_CHECK_GL_ERROR(glGenFramebuffers(1, &fb));
-        OGRE_CHECK_GL_ERROR(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb));
+        mRenderSystem->_getStateCacheManager()->bindGLFrameBuffer( GL_DRAW_FRAMEBUFFER, fb );
         if (fmt != GL_NONE)
         {
             if (tid)
+            {
                 OGRE_CHECK_GL_ERROR(glDeleteTextures(1, &tid));
+                mRenderSystem->_getStateCacheManager()->invalidateStateForTexture( tid );
+            }
 
             // Create and attach texture
             OGRE_CHECK_GL_ERROR(glGenTextures(1, &tid));
-            OGRE_CHECK_GL_ERROR(glBindTexture(GL_TEXTURE_2D, tid));
+            mRenderSystem->_getStateCacheManager()->bindGLTexture( GL_TEXTURE_2D, tid );
 
             // Set some default parameters
             OGRE_CHECK_GL_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0));
@@ -206,7 +216,7 @@ namespace Ogre {
             OGRE_CHECK_GL_ERROR(glGenRenderbuffers(1, &depthRB));
 
             // Bind it to FBO
-            OGRE_CHECK_GL_ERROR(glBindRenderbuffer(GL_RENDERBUFFER, depthRB));
+            mRenderSystem->_getStateCacheManager()->bindGLRenderBuffer( depthRB );
 
             // Allocate storage for depth buffer
             OGRE_CHECK_GL_ERROR(glRenderbufferStorage(GL_RENDERBUFFER, depthFormat,
@@ -221,7 +231,7 @@ namespace Ogre {
             // Generate stencil renderbuffer
             OGRE_CHECK_GL_ERROR(glGenRenderbuffers(1, &stencilRB));
             // Bind it to FBO
-            OGRE_CHECK_GL_ERROR(glBindRenderbuffer(GL_RENDERBUFFER, stencilRB));
+            mRenderSystem->_getStateCacheManager()->bindGLRenderBuffer( stencilRB );
 
             // Allocate storage for stencil buffer
             OGRE_CHECK_GL_ERROR(glRenderbufferStorage(GL_RENDERBUFFER, stencilFormat, PROBE_SIZE, PROBE_SIZE));
@@ -239,10 +249,10 @@ namespace Ogre {
         OGRE_CHECK_GL_ERROR(glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, 0));
 
         if (depthRB)
-            OGRE_CHECK_GL_ERROR(glDeleteRenderbuffers(1, &depthRB));
+            mRenderSystem->_getStateCacheManager()->deleteGLRenderBuffer(depthRB);
 
         if (stencilRB)
-            OGRE_CHECK_GL_ERROR(glDeleteRenderbuffers(1, &stencilRB));
+            mRenderSystem->_getStateCacheManager()->deleteGLRenderBuffer(stencilRB);
 
         return status == GL_FRAMEBUFFER_COMPLETE;
     }
@@ -259,7 +269,7 @@ namespace Ogre {
         OGRE_CHECK_GL_ERROR(glGenRenderbuffers(1, &packedRB));
 
         // Bind it to FBO
-        OGRE_CHECK_GL_ERROR(glBindRenderbuffer(GL_RENDERBUFFER, packedRB));
+        mRenderSystem->_getStateCacheManager()->bindGLRenderBuffer( packedRB );
 
         // Allocate storage for buffer
         OGRE_CHECK_GL_ERROR(glRenderbufferStorage(GL_RENDERBUFFER, packedFormat, PROBE_SIZE, PROBE_SIZE));
@@ -278,7 +288,7 @@ namespace Ogre {
         // Detach and destroy
         OGRE_CHECK_GL_ERROR(glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0));
         OGRE_CHECK_GL_ERROR(glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, 0));
-        OGRE_CHECK_GL_ERROR(glDeleteRenderbuffers(1, &packedRB));
+        mRenderSystem->_getStateCacheManager()->deleteGLRenderBuffer(packedRB);
 
         return status == GL_FRAMEBUFFER_COMPLETE;
     }
@@ -292,8 +302,7 @@ namespace Ogre {
         // is glGetInternalformativ supported?
         // core since GL 4.2: see https://www.opengl.org/wiki/GLAPI/glGetInternalformat
         // NOTE! GL_FRAMEBUFFER_RENDERABLE is supported only if the GL version is 4.3 or higher
-        bool hasInternalFormatQuery = mGLSupport.hasMinGLVersion(4, 3)
-                || mGLSupport.checkExtension("GL_ARB_internalformat_query2");
+        bool hasInternalFormatQuery = mRenderSystem->hasMinGLVersion(4, 3) || mRenderSystem->checkExtension("GL_ARB_internalformat_query2");
 
         // Try all formats, and report which ones work as target
         GLuint fb = 0, tid = 0;
@@ -410,11 +419,13 @@ namespace Ogre {
 
             if (!hasInternalFormatQuery) {
                 // Delete texture and framebuffer
-                OGRE_CHECK_GL_ERROR(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0));
-                OGRE_CHECK_GL_ERROR(glDeleteFramebuffers(1, &fb));
+                mRenderSystem->_getStateCacheManager()->bindGLFrameBuffer( GL_DRAW_FRAMEBUFFER, 0 );
+                mRenderSystem->_getStateCacheManager()->deleteGLRenderBuffer(fb);
 
-                if (internalFormat != GL_NONE) {
+                if (internalFormat != GL_NONE) 
+                {
                     OGRE_CHECK_GL_ERROR(glDeleteTextures(1, &tid));
+                    mRenderSystem->_getStateCacheManager()->invalidateStateForTexture( tid );
                     tid = 0;
                 }
             }
@@ -470,7 +481,7 @@ namespace Ogre {
     }
 
     GL3PlusFBORenderTexture *GL3PlusFBOManager::createRenderTexture(const String &name,
-                                                                    const GL3PlusSurfaceDesc &target, bool writeGamma, uint fsaa)
+                                                                    const GLSurfaceDesc &target, bool writeGamma, uint fsaa)
     {
         GL3PlusFBORenderTexture *retval = new GL3PlusFBORenderTexture(this, name, target, writeGamma, fsaa);
         return retval;
@@ -484,23 +495,23 @@ namespace Ogre {
     {
         // Check if the render target is in the rendertarget->FBO map
         GL3PlusFrameBufferObject *fbo = 0;
-        target->getCustomAttribute(GL3PlusRenderTexture::CustomAttributeString_FBO, &fbo);
+        target->getCustomAttribute(GLRenderTexture::CustomAttributeString_FBO, &fbo);
         if(fbo)
             fbo->bind();
         else
             // Old style context (window/pbuffer) or copying render texture
-            OGRE_CHECK_GL_ERROR(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+            mRenderSystem->_getStateCacheManager()->bindGLFrameBuffer( GL_FRAMEBUFFER, 0 );
     }
 
-    GL3PlusSurfaceDesc GL3PlusFBOManager::requestRenderBuffer(GLenum format, uint32 width, uint32 height, uint fsaa)
+    GLSurfaceDesc GL3PlusFBOManager::requestRenderBuffer(GLenum format, uint32 width, uint32 height, uint fsaa)
     {
-        GL3PlusSurfaceDesc retval;
+        GLSurfaceDesc retval;
         retval.buffer = 0; // Return 0 buffer if GL_NONE is requested
         if(format != GL_NONE)
         {
             RBFormat key(format, width, height, fsaa);
             RenderBufferMap::iterator it = mRenderBufferMap.find(key);
-            if(it != mRenderBufferMap.end() && (it->second.refcount == 0))
+            if(it != mRenderBufferMap.end())
             {
                 retval.buffer = it->second.buffer;
                 retval.zoffset = 0;

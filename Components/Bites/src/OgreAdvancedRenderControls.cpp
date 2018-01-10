@@ -58,6 +58,10 @@ AdvancedRenderControls::AdvancedRenderControls(TrayManager* trayMgr, Ogre::Camer
 #endif
 }
 
+AdvancedRenderControls::~AdvancedRenderControls() {
+    mTrayMgr->destroyWidget(mDetailsPanel);
+}
+
 bool AdvancedRenderControls::keyPressed(const KeyboardEvent& evt) {
     if (mTrayMgr->isDialogVisible())
         return true; // don't process any more keys if dialog is up
@@ -134,7 +138,19 @@ bool AdvancedRenderControls::keyPressed(const KeyboardEvent& evt) {
     {
         Ogre::TextureManager::getSingleton().reloadAll();
     }
-
+    else if (key == SDLK_F6)   // take a screenshot
+    {
+        mCamera->getViewport()->getTarget()->writeContentsToTimestampedFile("screenshot", ".png");
+    }
+#if OGRE_PROFILING
+    // Toggle visibility of profiler window
+    else if (key == 'p')
+    {
+        Ogre::Profiler* prof = Ogre::Profiler::getSingletonPtr();
+        if (prof)
+            prof->setEnabled(!prof->getEnabled());
+    }
+#endif // OGRE_PROFILING
 #ifdef OGRE_BUILD_COMPONENT_RTSHADERSYSTEM
     // Toggle schemes.
     else if (key == SDLK_F2) {
@@ -151,10 +167,12 @@ bool AdvancedRenderControls::keyPressed(const KeyboardEvent& evt) {
             }
         }
     }
+#   ifdef RTSHADER_SYSTEM_BUILD_EXT_SHADERS
     // Toggles per pixel per light model.
     else if (key == SDLK_F3) {
         static bool usePerPixelLighting = true;
 
+        //![rtss_per_pixel]
         // Grab the scheme render state.
         Ogre::RTShader::RenderState* schemRenderState =
             mShaderGenerator->getRenderState(Ogre::RTShader::ShaderGenerator::DEFAULT_SCHEME_NAME);
@@ -167,6 +185,7 @@ bool AdvancedRenderControls::keyPressed(const KeyboardEvent& evt) {
 
             schemRenderState->addTemplateSubRenderState(perPixelLightModel);
         }
+        //![rtss_per_pixel]
 
         // Search the per pixel sub render state and remove it.
         else {
@@ -197,7 +216,7 @@ bool AdvancedRenderControls::keyPressed(const KeyboardEvent& evt) {
             mDetailsPanel->setParamValue(12, "Vertex");
         usePerPixelLighting = !usePerPixelLighting;
     }
-
+#   endif
     // Switch vertex shader outputs compaction policy.
     else if (key == SDLK_F4) {
         switch (mShaderGenerator->getVertexShaderOutputsCompactPolicy()) {

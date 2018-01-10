@@ -282,9 +282,7 @@ namespace Ogre
 
     bool ScriptCompiler::compile(const String &str, const String &source, const String &group)
     {
-        ScriptLexer lexer;
-        ScriptParser parser;
-        ConcreteNodeListPtr nodes = parser.parse(lexer.tokenize(str, source));
+        ConcreteNodeListPtr nodes = ScriptParser::parse(ScriptLexer::tokenize(str, source));
         return compile(nodes, group);
     }
 
@@ -391,9 +389,7 @@ namespace Ogre
         // Clear the past errors
         mErrors.clear();
 
-        ScriptLexer lexer;
-        ScriptParser parser;
-        ConcreteNodeListPtr cst = parser.parse(lexer.tokenize(str, source));
+        ConcreteNodeListPtr cst = ScriptParser::parse(ScriptLexer::tokenize(str, source));
 
         // Call the listener to intercept CST
         if(mListener)
@@ -591,14 +587,17 @@ namespace Ogre
 
         if(!nodes && ResourceGroupManager::getSingletonPtr())
         {
-            DataStreamPtr stream = ResourceGroupManager::getSingleton().openResource(name, mGroup);
-            if(stream)
+            DataStreamPtr stream;
+            try
             {
-                ScriptLexer lexer;
-                ScriptTokenListPtr tokens = lexer.tokenize(stream->getAsString(), name);
-                ScriptParser parser;
-                nodes = parser.parse(tokens);
+                stream = ResourceGroupManager::getSingleton().openResource(name, mGroup);
             }
+            catch (FileNotFoundException&)
+            {
+                return retval;
+            }
+
+            nodes = ScriptParser::parse(ScriptLexer::tokenize(stream->getAsString(), name));
         }
 
         if(nodes)
@@ -952,10 +951,7 @@ namespace Ogre
                 if(varAccess.first)
                 {
                     // Found the variable, so process it and insert it into the tree
-                    ScriptLexer lexer;
-                    ScriptTokenListPtr tokens = lexer.tokenize(varAccess.second, var->file);
-                    ScriptParser parser;
-                    ConcreteNodeListPtr cst = parser.parseChunk(tokens);
+                    ConcreteNodeListPtr cst = ScriptParser::parseChunk(ScriptLexer::tokenize(varAccess.second, var->file));
                     AbstractNodeListPtr ast = convertToAST(cst);
 
                     // Set up ownership for these nodes

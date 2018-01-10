@@ -147,6 +147,11 @@ TEST_F(StringTests,MatchSuperGlobtastic)
     EXPECT_TRUE(StringUtil::match(testFileNoPath, "*e*tf*e.t*t", true));
 }
 //--------------------------------------------------------------------------
+TEST_F(StringTests,MatchSuperGlobEnd)
+{
+    EXPECT_TRUE(StringUtil::match("normal", "*normal*", true));
+}
+//--------------------------------------------------------------------------
 TEST_F(StringTests,ParseReal)
 {
     Real r = 23.454;
@@ -160,7 +165,7 @@ TEST_F(StringTests,ParseReal)
 //--------------------------------------------------------------------------
 TEST_F(StringTests,ParseInt)
 {
-    int r = 223546;
+    int r = -223546;
 
     String s = StringConverter::toString(r);
     int t = StringConverter::parseInt(s);
@@ -184,6 +189,16 @@ TEST_F(StringTests,ParseUnsignedLong)
 
     String s = StringConverter::toString(r);
     unsigned long t = StringConverter::parseUnsignedLong(s);
+
+    EXPECT_EQ(r, t);
+}
+//--------------------------------------------------------------------------
+TEST_F(StringTests,ParseSizeT)
+{
+    size_t r = 223546;
+
+    String s = StringConverter::toString(r);
+    size_t t = StringConverter::parseSizeT(s);
 
     EXPECT_EQ(r, t);
 }

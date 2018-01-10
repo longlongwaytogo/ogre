@@ -30,12 +30,13 @@ THE SOFTWARE.
 #include "OgreException.h"
 #include "OgreStringConverter.h"
 #include "OgreLogManager.h"
+#include "OgreGLSLProgramCommon.h"
 
 namespace Ogre {
 
-GLenum getGLShaderType(GpuProgramType programType)
+GLenum GLArbGpuProgram::getProgramType() const
 {
-    switch (programType)
+    switch (mType)
     {
         case GPT_VERTEX_PROGRAM:
         default:
@@ -47,7 +48,7 @@ GLenum getGLShaderType(GpuProgramType programType)
     }
 }
 
-GLGpuProgram::GLGpuProgram(ResourceManager* creator, const String& name, 
+GLGpuProgram::GLGpuProgram(ResourceManager* creator, const String& name,
     ResourceHandle handle, const String& group, bool isManual, 
     ManualResourceLoader* loader) 
     : GpuProgram(creator, name, handle, group, isManual, loader)
@@ -63,60 +64,6 @@ GLGpuProgram::~GLGpuProgram()
     // have to call this here reather than in Resource destructor
     // since calling virtual methods in base destructors causes crash
     unload(); 
-}
-
-GLuint GLGpuProgram::getAttributeIndex(VertexElementSemantic semantic, uint index)
-{
-    return getFixedAttributeIndex(semantic, index);
-}
-
-GLuint GLGpuProgram::getFixedAttributeIndex(VertexElementSemantic semantic, uint index)
-{
-    // Some drivers (e.g. OS X on nvidia) incorrectly determine the attribute binding automatically
-    // and end up aliasing existing built-ins. So avoid! Fixed builtins are: 
-
-    //  a  builtin              custom attrib name
-    // ----------------------------------------------
-    //  0  gl_Vertex            vertex
-    //  1  n/a                  blendWeights        
-    //  2  gl_Normal            normal
-    //  3  gl_Color             colour
-    //  4  gl_SecondaryColor    secondary_colour
-    //  5  gl_FogCoord          fog_coord
-    //  7  n/a                  blendIndices
-    //  8  gl_MultiTexCoord0    uv0
-    //  9  gl_MultiTexCoord1    uv1
-    //  10 gl_MultiTexCoord2    uv2
-    //  11 gl_MultiTexCoord3    uv3
-    //  12 gl_MultiTexCoord4    uv4
-    //  13 gl_MultiTexCoord5    uv5
-    //  14 gl_MultiTexCoord6    uv6, tangent
-    //  15 gl_MultiTexCoord7    uv7, binormal
-    switch(semantic)
-    {
-    case VES_POSITION:
-        return 0;
-    case VES_BLEND_WEIGHTS:
-        return 1;
-    case VES_NORMAL:
-        return 2;
-    case VES_DIFFUSE:
-        return 3;
-    case VES_SPECULAR:
-        return 4;
-    case VES_BLEND_INDICES:
-        return 7;
-    case VES_TEXTURE_COORDINATES:
-        return 8 + index;
-    case VES_TANGENT:
-        return 14;
-    case VES_BINORMAL:
-        return 15;
-    default:
-        assert(false && "Missing attribute!");
-        return 0;
-    };
-
 }
 
 bool GLGpuProgram::isAttributeValid(VertexElementSemantic semantic, uint index)
@@ -168,27 +115,21 @@ GLArbGpuProgram::~GLArbGpuProgram()
     unload(); 
 }
 
-void GLArbGpuProgram::setType(GpuProgramType t)
-{
-    GLGpuProgram::setType(t);
-    mProgramType = getGLShaderType(t);
-}
-
 void GLArbGpuProgram::bindProgram(void)
 {
-    glEnable(mProgramType);
-    glBindProgramARB(mProgramType, mProgramID);
+    glEnable(getProgramType());
+    glBindProgramARB(getProgramType(), mProgramID);
 }
 
 void GLArbGpuProgram::unbindProgram(void)
 {
-    glBindProgramARB(mProgramType, 0);
-    glDisable(mProgramType);
+    glBindProgramARB(getProgramType(), 0);
+    glDisable(getProgramType());
 }
 
 void GLArbGpuProgram::bindProgramParameters(GpuProgramParametersSharedPtr params, uint16 mask)
 {
-    GLenum type = getGLShaderType(mType);
+    GLenum type = getProgramType();
     
     // only supports float constants
     GpuLogicalBufferStructPtr floatStruct = params->getFloatLogicalBufferStruct();
@@ -215,7 +156,7 @@ void GLArbGpuProgram::bindProgramPassIterationParameters(GpuProgramParametersSha
 {
     if (params->hasPassIterationNumber())
     {
-        GLenum type = getGLShaderType(mType);
+        GLenum type = getProgramType();
 
         size_t physicalIndex = params->getPassIterationNumberIndex();
         size_t logicalIndex = params->getFloatLogicalIndexForPhysicalIndex(physicalIndex);
@@ -236,8 +177,8 @@ void GLArbGpuProgram::loadFromSource(void)
         LogManager::getSingleton().logMessage("Invalid Operation before loading program "+mName, LML_CRITICAL);
 
     }
-    glBindProgramARB(mProgramType, mProgramID);
-    glProgramStringARB(mProgramType, GL_PROGRAM_FORMAT_ASCII_ARB, (GLsizei)mSource.length(), mSource.c_str());
+    glBindProgramARB(getProgramType(), mProgramID);
+    glProgramStringARB(getProgramType(), GL_PROGRAM_FORMAT_ASCII_ARB, (GLsizei)mSource.length(), mSource.c_str());
 
     if (GL_INVALID_OPERATION == glGetError())
     {
@@ -250,7 +191,7 @@ void GLArbGpuProgram::loadFromSource(void)
             "Cannot load GL vertex program " + mName + 
             ".  Line " + errPosStr + ":\n" + errStr, mName);
     }
-    glBindProgramARB(mProgramType, 0);
+    glBindProgramARB(getProgramType(), 0);
 }
 
     

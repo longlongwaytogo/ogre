@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "OgrePrerequisites.h"
 #include "OgreHardwareBuffer.h"
 #include "OgreSharedPtr.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
     class HardwareBufferManagerBase;
@@ -60,16 +61,8 @@ namespace Ogre {
             const String& getName() const { return mName; }
 
     };
-
-    /** Shared pointer implementation used to share uniform buffers. */
-    class _OgreExport HardwareUniformBufferSharedPtr : public SharedPtr<HardwareUniformBuffer>
-    {
-    public:
-        HardwareUniformBufferSharedPtr() : SharedPtr<HardwareUniformBuffer>() {}
-        explicit HardwareUniformBufferSharedPtr(HardwareUniformBuffer* buf);
-    };
-
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

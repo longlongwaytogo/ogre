@@ -31,11 +31,12 @@
 #include "OgreGL3PlusHardwarePixelBuffer.h"
 #include "OgreGL3PlusPixelFormat.h"
 #include "OgreGL3PlusFBORenderTexture.h"
+#include "OgreGL3PlusStateCacheManager.h"
+#include "OgreGL3PlusRenderSystem.h"
 
 #include "OgreRoot.h"
-#include "OgreGLSLMonolithicProgramManager.h"
+#include "OgreGLSLProgramManager.h"
 #include "OgreGLSLMonolithicProgram.h"
-#include "OgreGLSLSeparableProgramManager.h"
 #include "OgreGLSLSeparableProgram.h"
 
 namespace Ogre {
@@ -45,9 +46,10 @@ namespace Ogre {
                                                            HardwareBuffer::Usage usage)
         : GLHardwarePixelBufferCommon(inWidth, inHeight, inDepth, inFormat, usage)
     {
+        mRenderSystem = static_cast<GL3PlusRenderSystem*>(Root::getSingleton().getRenderSystem());
     }
 
-    void GL3PlusHardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Image::Box &dstBox)
+    void GL3PlusHardwarePixelBuffer::blitFromMemory(const PixelBox &src, const Box &dstBox)
     {
         if (!mBuffer.contains(dstBox))
         {
@@ -68,7 +70,7 @@ namespace Ogre {
             scaled = mBuffer.getSubVolume(dstBox);
             Image::scale(src, scaled, Image::FILTER_BILINEAR);
         }
-        else if (GL3PlusPixelUtil::getGLOriginFormat(src.format) == 0)
+        else if (GL3PlusPixelUtil::getGLInternalFormat(src.format) == 0)
         {
             // Extents match, but format is not accepted as valid
             // source format for GL. Do conversion in temporary buffer.
@@ -78,7 +80,6 @@ namespace Ogre {
         }
         else
         {
-            allocateBuffer();
             // No scaling or conversion needed.
             scaled = src;
         }
@@ -87,7 +88,7 @@ namespace Ogre {
         freeBuffer();
     }
 
-    void GL3PlusHardwarePixelBuffer::blitToMemory(const Image::Box &srcBox, const PixelBox &dst)
+    void GL3PlusHardwarePixelBuffer::blitToMemory(const Box &srcBox, const PixelBox &dst)
     {
         if (!mBuffer.contains(srcBox))
         {
@@ -102,7 +103,7 @@ namespace Ogre {
             dst.getWidth() == getWidth() &&
             dst.getHeight() == getHeight() &&
             dst.getDepth() == getDepth() &&
-            GL3PlusPixelUtil::getGLOriginFormat(dst.format) != 0)
+            GL3PlusPixelUtil::getGLInternalFormat(dst.format) != 0)
         {
             // The direct case: the user wants the entire texture in a format supported by GL
             // so we don't need an intermediate buffer
@@ -143,7 +144,7 @@ namespace Ogre {
         OGRE_CHECK_GL_ERROR(glGenRenderbuffers(1, &mRenderbufferID));
 
         // Bind it to FBO
-        OGRE_CHECK_GL_ERROR(glBindRenderbuffer(GL_RENDERBUFFER, mRenderbufferID));
+        mRenderSystem->_getStateCacheManager()->bindGLRenderBuffer( mRenderbufferID );
 
         // Allocate storage for depth buffer
         if (numSamples > 0)
@@ -160,8 +161,9 @@ namespace Ogre {
 
     GL3PlusRenderBuffer::~GL3PlusRenderBuffer()
     {
-        // Generate renderbuffer
-        OGRE_CHECK_GL_ERROR(glDeleteRenderbuffers(1, &mRenderbufferID));
+        // Delete renderbuffer
+        if(GL3PlusStateCacheManager* stateCacheManager = mRenderSystem->_getStateCacheManager())
+            stateCacheManager->deleteGLRenderBuffer(mRenderbufferID);
     }
 
     void GL3PlusRenderBuffer::bindToFramebuffer(uint32 attachment, uint32 zoffset)

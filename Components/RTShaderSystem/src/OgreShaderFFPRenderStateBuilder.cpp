@@ -143,13 +143,8 @@ void FFPRenderStateBuilder::buildRenderState(ShaderGenerator::SGPass* sgPass, Ta
     
     // Build fog sub state.
     buildFFPSubRenderState(FFP_FOG, FFPFog::Type, sgPass, renderState);
-	
-	RenderSystem* rs = Root::getSingleton().getRenderSystem();
-	if (rs->getName().find("Direct3D11") != String::npos && 
-		sgPass->getSrcPass()->getAlphaRejectFunction() != CMPF_ALWAYS_PASS)
-	{
-		buildFFPSubRenderState(FFP_ALPHA_TEST, FFPAlphaTest::Type, sgPass, renderState);
-	}
+
+    buildFFPSubRenderState(FFP_ALPHA_TEST, FFPAlphaTest::Type, sgPass, renderState);
 	
     // Resolve colour stage flags.
     resolveColourStageFlags(sgPass, renderState);

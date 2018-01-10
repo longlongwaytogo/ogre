@@ -36,6 +36,7 @@ THE SOFTWARE.
 #include "OgreCommon.h"
 #include "Threading/OgreThreadHeaders.h"
 #include <ctime>
+#include "OgreHeaderPrefix.h"
 
 // If X11/Xlib.h gets included before this header (for example it happens when
 // including wxWidgets and FLTK), Status is defined as an int which we don't
@@ -52,7 +53,7 @@ namespace Ogre {
     /** \addtogroup Resources
     *  @{
     */
-    /** This abstract class defines an interface which is called back during
+    /** This class defines an interface which is called back during
         resource group loading to indicate the progress of the load. 
     @remarks
         Resource group loading is in 2 phases - creating resources from 
@@ -96,7 +97,7 @@ namespace Ogre {
         @param groupName The name of the group 
         @param scriptCount The number of scripts which will be parsed
         */
-        virtual void resourceGroupScriptingStarted(const String& groupName, size_t scriptCount) = 0;
+        virtual void resourceGroupScriptingStarted(const String& groupName, size_t scriptCount) {}
         /** This event is fired when a script is about to be parsed.
             @param scriptName Name of the to be parsed
             @param skipThisScript A boolean passed by reference which is by default set to 
@@ -104,13 +105,13 @@ namespace Ogre {
             parsed. Note that in this case the scriptParseEnded event will not be raised
             for this script.
         */
-        virtual void scriptParseStarted(const String& scriptName, bool& skipThisScript) = 0;
+        virtual void scriptParseStarted(const String& scriptName, bool& skipThisScript) {}
 
         /** This event is fired when the script has been fully parsed.
         */
-        virtual void scriptParseEnded(const String& scriptName, bool skipped) = 0;
+        virtual void scriptParseEnded(const String& scriptName, bool skipped) {}
         /** This event is fired when a resource group finished parsing scripts. */
-        virtual void resourceGroupScriptingEnded(const String& groupName) = 0;
+        virtual void resourceGroupScriptingEnded(const String& groupName) {}
 
         /** This event is fired  when a resource group begins preparing.
         @param groupName The name of the group being prepared
@@ -151,27 +152,27 @@ namespace Ogre {
         @param resourceCount The number of resources which will be loaded, including
             a number of stages required to load any linked world geometry
         */
-        virtual void resourceGroupLoadStarted(const String& groupName, size_t resourceCount) = 0;
+        virtual void resourceGroupLoadStarted(const String& groupName, size_t resourceCount) {}
         /** This event is fired when a declared resource is about to be loaded. 
         @param resource Weak reference to the resource loaded.
         */
-        virtual void resourceLoadStarted(const ResourcePtr& resource) = 0;
+        virtual void resourceLoadStarted(const ResourcePtr& resource) {}
         /** This event is fired when the resource has been loaded. 
         */
-        virtual void resourceLoadEnded(void) = 0;
+        virtual void resourceLoadEnded(void) {}
         /** This event is fired when a stage of loading linked world geometry 
             is about to start. The number of stages required will have been 
             included in the resourceCount passed in resourceGroupLoadStarted.
         @param description Text description of what was just loaded
         */
-        virtual void worldGeometryStageStarted(const String& description) = 0;
+        virtual void worldGeometryStageStarted(const String& description){}
         /** This event is fired when a stage of loading linked world geometry 
             has been completed. The number of stages required will have been 
             included in the resourceCount passed in resourceGroupLoadStarted.
         */
-        virtual void worldGeometryStageEnded(void) = 0;
+        virtual void worldGeometryStageEnded(void) {}
         /** This event is fired when a resource group finished loading. */
-        virtual void resourceGroupLoadEnded(const String& groupName) = 0;
+        virtual void resourceGroupLoadEnded(const String& groupName) {}
         /** This event is fired when a resource was just created.
         @param resource Weak reference to the resource created.
         */
@@ -205,6 +206,8 @@ namespace Ogre {
         virtual void resourceStreamOpened(const String &name, const String &group, Resource *resource, DataStreamPtr& dataStream) = 0;
 
         /** This event is called when a resource collides with another existing one in a resource manager
+
+            return false to skip registration of the conflicting resource and continue using the previous instance.
           */
         virtual bool resourceCollision(Resource *resource, ResourceManager *resourceManager) = 0;
     };
@@ -421,6 +424,12 @@ namespace Ogre {
          @param filename Fully qualified name of the file to test for
          */
         Archive* resourceExists(ResourceGroup* group, const String& filename) const;
+
+        /** Open resource with optional searching in other groups if it is not found. Internal use only */
+        DataStreamPtr openResourceImpl(const String& resourceName,
+            const String& groupName,
+            bool searchGroupsIfNotFound,
+            Resource* resourceBeingLoaded) const;
 
         /// Stored current group - optimisation for when bulk loading a group
         ResourceGroup* mCurrentGroup;
@@ -736,7 +745,10 @@ namespace Ogre {
         */
         DataStreamPtr openResource(const String& resourceName,
                                    const String& groupName = DEFAULT_RESOURCE_GROUP_NAME,
-                                   Resource* resourceBeingLoaded = NULL) const;
+                                   Resource* resourceBeingLoaded = NULL) const
+        {
+            return openResourceImpl(resourceName, groupName, false, resourceBeingLoaded);
+        }
 
         /// @deprecated use AUTODETECT_RESOURCE_GROUP_NAME instead of searchGroupsIfNotFound
         OGRE_DEPRECATED DataStreamPtr openResource(const String& resourceName,
@@ -744,9 +756,7 @@ namespace Ogre {
                                                    bool searchGroupsIfNotFound,
                                                    Resource* resourceBeingLoaded = 0) const
         {
-            return openResource(resourceName,
-                                searchGroupsIfNotFound ? AUTODETECT_RESOURCE_GROUP_NAME : groupName,
-                                resourceBeingLoaded);
+            return openResourceImpl(resourceName, groupName, searchGroupsIfNotFound, resourceBeingLoaded);
         }
 
         /** Open all resources matching a given pattern (which can contain
@@ -1054,5 +1064,6 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

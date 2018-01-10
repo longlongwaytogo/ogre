@@ -227,7 +227,7 @@ namespace Ogre
 
         while ( mit != mObjectsByName.end() )
         {
-            MovableObject * mo = mit->second;
+            MovableObject * mo = *mit;
 
             mo->_notifyCurrentCamera(cam);
             if ( mo->isVisible() &&

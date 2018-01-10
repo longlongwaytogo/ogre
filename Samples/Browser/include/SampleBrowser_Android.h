@@ -30,23 +30,17 @@
 #define __SampleBrowser_Android_H__
 
 #include <android_native_app_glue.h>
-#include <android/log.h>
+
 #include "OgrePlatform.h"
 #include "SampleBrowser.h"
 #include "OgreInput.h"
 #include "OgreGLRenderSystemCommon.h"
 
-#include <gestureDetector.h>
-
-#undef LOGI
-#undef LOGW
+#include "gestureDetector.h"
 
 #if OGRE_PLATFORM != OGRE_PLATFORM_ANDROID
 #   error This header is for use with Android only
 #endif
-
-#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "Ogre", __VA_ARGS__))
-#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, "Ogre", __VA_ARGS__))
 
 namespace OgreBites
 {
@@ -87,11 +81,11 @@ namespace OgreBites
                 if(s & ndk_helper::GESTURE_STATE_START) {
                     ndk_helper::Vec2 p1, p2;
                     mPinchGesture.GetPointers(p1, p2);
-                    len = (p1 - p2).Length();
+                    len = (p1 - p2).length();
                 } else if (s & ndk_helper::GESTURE_STATE_MOVE) {
                     ndk_helper::Vec2 p1, p2;
                     mPinchGesture.GetPointers(p1, p2);
-                    float curr = (p1 - p2).Length();
+                    float curr = (p1 - p2).length();
 
                     if(fabs(curr - len)/mBrowser.getRenderWindow()->getWidth() > 0.01) {
                         wheel = (curr - len) > 0 ? 1 : -1;
@@ -110,7 +104,7 @@ namespace OgreBites
             switch (cmd) 
             {
                 case APP_CMD_SAVE_STATE:
-                break;
+                    break;
                 case APP_CMD_INIT_WINDOW:
                     if (app->window)
                     {
@@ -122,18 +116,22 @@ namespace OgreBites
                         {
                             AConfiguration* config = AConfiguration_new();
                             AConfiguration_fromAssetManager(config, app->activity->assetManager);
-                            GLRenderSystemCommon::_createInternalResources(mBrowser.getRenderWindow(), app->window, config);
+                            mBrowser.getRenderWindow()->_notifySurfaceCreated(app->window, config);
                             AConfiguration_delete(config);
                         }
                     }
                     break;
                 case APP_CMD_TERM_WINDOW:
                     if(mBrowser.getRenderWindow())
-                        GLRenderSystemCommon::_destroyInternalResources(mBrowser.getRenderWindow());
+                        mBrowser.getRenderWindow()->_notifySurfaceDestroyed();
                     break;
-                case APP_CMD_GAINED_FOCUS:
+                case APP_CMD_RESUME:
+                    if(mBrowser.getRenderWindow())
+                        mBrowser.getRenderWindow()->setVisible(true);
                     break;
-                case APP_CMD_LOST_FOCUS:
+                case APP_CMD_PAUSE:
+                    if(mBrowser.getRenderWindow())
+                        mBrowser.getRenderWindow()->setVisible(false);
                     break;
                 case APP_CMD_CONFIG_CHANGED:
                     break;
@@ -158,7 +156,6 @@ namespace OgreBites
                 
                 if(mBrowser.getRenderWindow() && mBrowser.getRenderWindow()->isActive())
                 {
-                    mBrowser.getRenderWindow()->windowMovedOrResized();
                     mBrowser.getRoot()->renderOneFrame();
                 }
             }

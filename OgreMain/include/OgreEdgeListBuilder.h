@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "OgreRenderOperation.h"
 #include "OgreVector3.h"
 #include "OgreVector4.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -88,7 +89,7 @@ namespace Ogre {
         /** Array of 4D vector of triangle face normal, which is unit vector orthogonal
             to the triangles, plus distance from origin.
             Use aligned policy here because we are intended to use in SIMD optimised routines. */
-        typedef std::vector<Vector4, STLAllocator<Vector4, CategorisedAlignAllocPolicy<MEMCATEGORY_GEOMETRY> > > TriangleFaceNormalList;
+        typedef vector<Vector4>::type TriangleFaceNormalList;
 
         /** Working vector used when calculating the silhouette.
             Use std::vector<char> instead of std::vector<bool> which might implemented
@@ -272,6 +273,7 @@ namespace Ogre {
 
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif
 

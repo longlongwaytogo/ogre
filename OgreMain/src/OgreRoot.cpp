@@ -64,6 +64,7 @@ THE SOFTWARE.
 #include "OgreFrameListener.h"
 #include "OgreLodStrategyManager.h"
 #include "Threading/OgreDefaultWorkQueue.h"
+#include "OgreFileSystemLayer.h"
 
 #if OGRE_NO_FREEIMAGE == 0
 #include "OgreFreeImageCodec.h"
@@ -85,14 +86,14 @@ THE SOFTWARE.
 #include "OgreScriptCompiler.h"
 #include "OgreWindowEventUtilities.h"
 
-#if OGRE_PLATFORM == OGRE_PLATFORM_APPLE || OGRE_PLATFORM == OGRE_PLATFORM_APPLE_IOS
-#include "macUtils.h"
-#endif
 #if OGRE_NO_PVRTC_CODEC == 0
 #  include "OgrePVRTCCodec.h"
 #endif
 #if OGRE_NO_ETC_CODEC == 0
 #  include "OgreETCCodec.h"
+#endif
+#if OGRE_NO_ASTC_CODEC == 0
+#  include "OgreASTCCodec.h"
 #endif
 
 namespace Ogre {
@@ -171,18 +172,13 @@ namespace Ogre {
         // never process responses in main thread for longer than 10ms by default
         defaultQ->setResponseProcessingTimeLimit(10);
         // match threads to hardware
-#if OGRE_THREAD_SUPPORT
         unsigned threadCount = OGRE_THREAD_HARDWARE_CONCURRENCY;
         if (!threadCount)
             threadCount = 1;
         defaultQ->setWorkerThreadCount(threadCount);
-#endif
+
         // only allow workers to access rendersystem if threadsupport is 1
-#if OGRE_THREAD_SUPPORT == 1
-        defaultQ->setWorkersCanAccessRenderSystem(true);
-#else
-        defaultQ->setWorkersCanAccessRenderSystem(false);
-#endif
+        defaultQ->setWorkersCanAccessRenderSystem(OGRE_THREAD_SUPPORT == 1);
         mWorkQueue = defaultQ;
 
         // ResourceBackgroundQueue
@@ -248,6 +244,9 @@ namespace Ogre {
 #if OGRE_NO_STBI_CODEC == 0
         STBIImageCodec::startup();
 #endif
+#if OGRE_NO_ASTC_CODEC == 0
+        ASTCCodec::startup();
+#endif
 
         mHighLevelGpuProgramManager = OGRE_NEW HighLevelGpuProgramManager();
 
@@ -311,6 +310,9 @@ namespace Ogre {
 #endif
 #if OGRE_NO_STBI_CODEC == 0
         STBIImageCodec::shutdown();
+#endif
+#if OGRE_NO_ASTC_CODEC == 0
+        ASTCCodec::shutdown();
 #endif
 #if OGRE_PROFILING
         OGRE_DELETE mProfiler;
@@ -486,7 +488,7 @@ namespace Ogre {
             // Don't trim whitespace
             cfg.load(mConfigFileName, "\t:=", false);
         }
-        catch (FileNotFoundException& e)
+        catch (FileNotFoundException&)
         {
             return false;
         }
@@ -666,7 +668,7 @@ namespace Ogre {
         // .rendercaps manager
         RenderSystemCapabilitiesManager& rscManager = RenderSystemCapabilitiesManager::getSingleton();
         // caller wants to load custom RenderSystemCapabilities form a config file
-        if(customCapabilitiesConfig != BLANKSTRING)
+        if(!customCapabilitiesConfig.empty())
         {
             ConfigFile cfg;
             cfg.load(customCapabilitiesConfig, "\t:=", false);
@@ -765,7 +767,12 @@ namespace Ogre {
     Root::getSceneManagerMetaDataIterator(void) const
     {
         return mSceneManagerEnum->getMetaDataIterator();
-
+    }
+    //-----------------------------------------------------------------------
+    const SceneManagerEnumerator::MetaDataList&
+    Root::getSceneManagerMetaData(void) const
+    {
+        return mSceneManagerEnum->getMetaData();
     }
     //-----------------------------------------------------------------------
     SceneManager* Root::createSceneManager(const String& typeName,
@@ -798,6 +805,11 @@ namespace Ogre {
     SceneManagerEnumerator::SceneManagerIterator Root::getSceneManagerIterator(void)
     {
         return mSceneManagerEnum->getSceneManagerIterator();
+    }
+    //-----------------------------------------------------------------------
+    const SceneManagerEnumerator::Instances& Root::getSceneManagers(void) const
+    {
+        return mSceneManagerEnum->getSceneManagers();
     }
     //-----------------------------------------------------------------------
     TextureManager* Root::getTextureManager(void)
@@ -1027,11 +1039,16 @@ namespace Ogre {
         mResourceBackgroundQueue->shutdown();
         mWorkQueue->shutdown();
 
-        SceneManagerEnumerator::getSingleton().shutdownAll();
-        shutdownPlugins();
+        if(mSceneManagerEnum)
+            mSceneManagerEnum->shutdownAll();
+        if(mFirstTimePostWindowInit)
+            shutdownPlugins();
         OGRE_DELETE mSceneManagerEnum;
+        mSceneManagerEnum = NULL;
 
         OGRE_DELETE mShadowTextureManager;
+        mShadowTextureManager = NULL;
+
         ShadowVolumeExtrudeProgram::shutdown();
         ResourceGroupManager::getSingleton().shutdownAll();
 
@@ -1061,6 +1078,8 @@ namespace Ogre {
 
         pluginDir = cfg.getSetting("PluginFolder"); // Ignored on Mac OS X, uses Resources/ directory
         pluginList = cfg.getMultiSetting("Plugin");
+
+        pluginDir = FileSystemLayer::resolveBundlePath(pluginDir);
 
         if (!pluginDir.empty() && *pluginDir.rbegin() != '/' && *pluginDir.rbegin() != '\\')
         {
@@ -1180,27 +1199,24 @@ namespace Ogre {
     DataStreamPtr Root::openFileStream(const String& filename, const String& groupName,
         const String& locationPattern)
     {
-        DataStreamPtr stream;
-        if (ResourceGroupManager::getSingleton().resourceExists(
-            groupName, filename))
+        try
         {
-            stream = ResourceGroupManager::getSingleton().openResource(
-                filename, groupName);
+            return ResourceGroupManager::getSingleton().openResource(filename, groupName);
         }
-        else
+        catch (FileNotFoundException&)
         {
-            // try direct
-            std::ifstream *ifs = OGRE_NEW_T(std::ifstream, MEMCATEGORY_GENERAL);
-            ifs->open(filename.c_str(), std::ios::in | std::ios::binary);
-            if(!*ifs)
-            {
-                OGRE_DELETE_T(ifs, basic_ifstream, MEMCATEGORY_GENERAL);
-                OGRE_EXCEPT(
-                    Exception::ERR_FILE_NOT_FOUND, "'" + filename + "' file not found!", __FUNCTION__);
-            }
-            stream.reset(OGRE_NEW FileStreamDataStream(filename, ifs));
         }
-        return stream;
+
+        // try direct
+        std::ifstream *ifs = OGRE_NEW_T(std::ifstream, MEMCATEGORY_GENERAL);
+        ifs->open(filename.c_str(), std::ios::in | std::ios::binary);
+        if(!*ifs)
+        {
+            OGRE_DELETE_T(ifs, basic_ifstream, MEMCATEGORY_GENERAL);
+            OGRE_EXCEPT(
+                Exception::ERR_FILE_NOT_FOUND, "'" + filename + "' file not found!", __FUNCTION__);
+        }
+        return DataStreamPtr(OGRE_NEW FileStreamDataStream(filename, ifs));
     }
     //-----------------------------------------------------------------------
     void Root::convertColourValue(const ColourValue& colour, uint32* pDest)
@@ -1441,8 +1457,9 @@ namespace Ogre {
         // This belongs here, as all render targets must be updated before events are
         // triggered, otherwise targets could be mismatched.  This could produce artifacts,
         // for instance, with shadows.
-        for (SceneManagerEnumerator::SceneManagerIterator it = getSceneManagerIterator(); it.hasMoreElements(); it.moveNext())
-            it.peekNextValue()->_handleLodEvents();
+        SceneManagerEnumerator::Instances::const_iterator it, end = getSceneManagers().end();
+        for (it = getSceneManagers().begin(); it != end; ++it)
+            it->second->_handleLodEvents();
 
         return ret;
     }
@@ -1459,8 +1476,9 @@ namespace Ogre {
         // This belongs here, as all render targets must be updated before events are
         // triggered, otherwise targets could be mismatched.  This could produce artifacts,
         // for instance, with shadows.
-        for (SceneManagerEnumerator::SceneManagerIterator it = getSceneManagerIterator(); it.hasMoreElements(); it.moveNext())
-            it.peekNextValue()->_handleLodEvents();
+        SceneManagerEnumerator::Instances::const_iterator it, end = getSceneManagers().end();
+        for (it = getSceneManagers().begin(); it != end; ++it)
+            it->second->_handleLodEvents();
 
         return ret;
     }

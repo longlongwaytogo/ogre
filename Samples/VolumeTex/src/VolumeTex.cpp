@@ -24,19 +24,21 @@ same license as the rest of the engine.
 #include "ThingRenderable.h"
 #include "Julia.h"
 
-
+namespace {
 TexturePtr ptex;
 SimpleRenderable *vrend;
 SimpleRenderable *trend;
-Overlay* overlay;
-float xtime = 0.0f;
 SceneNode *snode,*fnode;
 AnimationState* mOgreAnimState = 0;
+}
 
 #ifndef OGRE_STATIC_LIB
 
 static SamplePlugin* sp;
 static Sample* s;
+
+extern "C" void _OgreSampleExport dllStartPlugin(void);
+extern "C" void _OgreSampleExport dllStopPlugin(void);
 
 extern "C" _OgreSampleExport void dllStartPlugin()
 {
@@ -62,7 +64,7 @@ void Sample_VolumeTex::setupContent()
     }
     // Create dynamic texture
     ptex = TextureManager::getSingleton().createManual(
-                "DynaTex","VolumeRenderable", TEX_TYPE_3D, 64, 64, 64, 0, PF_A8R8G8B8);
+                "DynaTex","VolumeRenderable", TEX_TYPE_3D, 64, 64, 64, 0, PF_BYTE_RGBA);
 
     // Set ambient light
     mSceneMgr->setAmbientLight(ColourValue(0.6, 0.6, 0.6));
@@ -74,8 +76,7 @@ void Sample_VolumeTex::setupContent()
     Light* l = mSceneMgr->createLight("MainLight");
     l->setDiffuseColour(0.75, 0.75, 0.80);
     l->setSpecularColour(0.9, 0.9, 1);
-    l->setPosition(-100,80,50);
-    mSceneMgr->getRootSceneNode()->attachObject(l);
+    mSceneMgr->getRootSceneNode()->createChildSceneNode(Vector3(-100,80,50))->attachObject(l);
 
     // Create volume renderable
     snode = mSceneMgr->getRootSceneNode()->createChildSceneNode(Vector3(0,0,0));
@@ -84,7 +85,8 @@ void Sample_VolumeTex::setupContent()
     snode->attachObject( vrend );
 
     trend = new ThingRenderable(90.0f, 32, 7.5f);
-    trend->setMaterial("Examples/VTDarkStuff");
+    MaterialPtr mat = MaterialManager::getSingleton().getByName("Examples/VTDarkStuff", "General");
+    trend->setMaterial(mat);
     snode->attachObject(trend);
 
     // Ogre head node
@@ -121,15 +123,13 @@ void Sample_VolumeTex::setupContent()
     // show GUI
     createControls();
 
-    setDragLook(true);
+    mCameraMan->setStyle(CS_ORBIT);
 
     generate();
 }
 
 bool Sample_VolumeTex::frameRenderingQueued(const FrameEvent &evt)
 {
-    xtime += evt.timeSinceLastFrame;
-    xtime = fmod(xtime, 10.0f);
     //snode->roll(Degree(evt.timeSinceLastFrame * 20.0f));
     //fnode->roll(Degree(evt.timeSinceLastFrame * 20.0f));
     static_cast<ThingRenderable*>(trend)->addTime(evt.timeSinceLastFrame * 0.05f);
@@ -184,7 +184,7 @@ void Sample_VolumeTex::generate()
                     if(val > vcut)
                         val = vcut;
 
-                    PixelUtil::packColour((float)x/pb.getWidth(), (float)y/pb.getHeight(), (float)z/pb.getDepth(), (1.0f-(val*vscale))*0.7f, PF_A8R8G8B8, &pbptr[x]);
+                    PixelUtil::packColour((float)x/pb.getWidth(), (float)y/pb.getHeight(), (float)z/pb.getDepth(), (1.0f-(val*vscale))*0.7f, PF_BYTE_RGBA, &pbptr[x]);
 
                 }
             }

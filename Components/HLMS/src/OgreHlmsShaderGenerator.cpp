@@ -30,6 +30,89 @@ THE SOFTWARE.
 
 namespace Ogre
 {
+    class SubStringRef
+    {
+        String const *mOriginal;
+        size_t  mStart;
+        size_t  mEnd;
+
+    public:
+        SubStringRef(const String *original, size_t start) :
+            mOriginal( original ),
+            mStart( start ),
+            mEnd( original->size() )
+        {
+            assert( start <= original->size() );
+        }
+
+        SubStringRef(const String *original, size_t _start, size_t _end) :
+            mOriginal( original ),
+            mStart( _start ),
+            mEnd( _end )
+        {
+            assert( _start <= _end );
+            assert( _end <= original->size() );
+        }
+
+        SubStringRef(const String *original, String::const_iterator _start) :
+            mOriginal( original ),
+            mStart( _start - original->begin() ),
+            mEnd( original->size() )
+        {
+        }
+
+        size_t find( const char *value, size_t pos=0 ) const
+        {
+            size_t retVal = mOriginal->find( value, mStart + pos );
+            if( retVal >= mEnd )
+                retVal = String::npos;
+            else if (retVal != String::npos)
+                retVal -= mStart;
+
+            return retVal;
+        }
+
+        size_t find(const String &value) const
+        {
+            size_t retVal = mOriginal->find( value, mStart );
+            if( retVal >= mEnd )
+                retVal = String::npos;
+            else if (retVal != String::npos)
+                retVal -= mStart;
+
+            return retVal;
+        }
+
+        size_t findFirstOf( const char *c, size_t pos ) const
+        {
+            size_t retVal = mOriginal->find_first_of( c, mStart + pos );
+            if( retVal >= mEnd )
+                retVal = String::npos;
+            else if (retVal != String::npos)
+                retVal -= mStart;
+
+            return retVal;
+        }
+
+        bool matchEqual( const char *stringCompare ) const
+        {
+            const char *origStr = mOriginal->c_str() + mStart;
+            ptrdiff_t length = mEnd - mStart;
+            while( *origStr == *stringCompare && *origStr && --length )
+                ++origStr, ++stringCompare;
+
+            return length == 0 && *origStr == *stringCompare;
+        }
+
+        void setStart( size_t newStart )            { mStart = std::min( newStart, mOriginal->size() ); }
+        void setEnd( size_t newEnd )                { mEnd = std::min( newEnd, mOriginal->size() ); }
+        size_t getStart(void) const                 { return mStart; }
+        size_t getEnd(void) const                   { return mEnd; }
+        size_t getSize(void) const                  { return mEnd - mStart; }
+        String::const_iterator begin() const        { return mOriginal->begin() + mStart; }
+        String::const_iterator end() const          { return mOriginal->begin() + mEnd; }
+        const String& getOriginalBuffer() const     { return *mOriginal; }
+    };
 	//-----------------------------------------------------------------------------------
 	void ShaderGenerator::findBlockEnd(SubStringRef &outSubString, bool &syntaxError)
 	{
@@ -401,9 +484,7 @@ namespace Ogre
 				SubStringRef subString(&inSubString.getOriginalBuffer(), itor + 1);
 				if (subString.find(counterVar) == 0)
 				{
-					char tmp[16];
-					sprintf(tmp, "%zu", passNum);
-					outBuffer += tmp;
+					outBuffer += StringConverter::toString(passNum);
 					itor += counterVar.size() + 1;
 				}
 				else
@@ -418,12 +499,12 @@ namespace Ogre
 		}
 	}
 	//-----------------------------------------------------------------------------------
-	int setOp(int op1, int op2) { return op2; }
-	int addOp(int op1, int op2) { return op1 + op2; }
-	int subOp(int op1, int op2) { return op1 - op2; }
-	int mulOp(int op1, int op2) { return op1 * op2; }
-	int divOp(int op1, int op2) { return op1 / op2; }
-	int modOp(int op1, int op2) { return op1 % op2; }
+	static int setOp(int op1, int op2) { return op2; }
+	static int addOp(int op1, int op2) { return op1 + op2; }
+	static int subOp(int op1, int op2) { return op1 - op2; }
+	static int mulOp(int op1, int op2) { return op1 * op2; }
+	static int divOp(int op1, int op2) { return op1 / op2; }
+	static int modOp(int op1, int op2) { return op1 % op2; }
 
 	struct Operation
 	{
@@ -582,7 +663,7 @@ namespace Ogre
 				counterVar = argValues[0];
 
 				// Agr 2 (start)
-				int start = strtol(argValues[1].c_str(), &endPtr, 10);
+				long start = strtol(argValues[1].c_str(), &endPtr, 10);
 				if (argValues[1].c_str() == endPtr)
 				{
 					//This isn't a number. Let's try if it's a variable
@@ -590,7 +671,7 @@ namespace Ogre
 				}
 
 				// Arg 3 (count)
-				int count = strtol(argValues[2].c_str(), &endPtr, 10);
+				long count = strtol(argValues[2].c_str(), &endPtr, 10);
 				if (argValues[2].c_str() == endPtr)
 				{
 					//This isn't a number. Let's try if it's a variable
@@ -734,6 +815,8 @@ namespace Ogre
 				PiecesMap::const_iterator it = pieces.find(pieceName);
 				if (it != pieces.end())
 					outBuffer += it->second;
+				else
+				    LogManager::getSingleton().logError("Piece not found: "+argValues[0]);
 			}
 			else
 			{

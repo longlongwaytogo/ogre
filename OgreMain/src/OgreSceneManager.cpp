@@ -69,6 +69,8 @@ THE SOFTWARE.
 
 #include <cstdio>
 
+#define ITER_VAL(it) (*it)
+
 namespace Ogre {
 
 //-----------------------------------------------------------------------
@@ -343,7 +345,8 @@ void SceneManager::destroyCamera(const String& name)
             mShadowCamLightMapping.erase( camLightIt );
 
         // Notify render system
-        mDestRenderSystem->_notifyCameraRemoved(i->second);
+        if(mDestRenderSystem)
+            mDestRenderSystem->_notifyCameraRemoved(i->second);
         OGRE_DELETE i->second;
         mCameras.erase(i);
     }
@@ -789,7 +792,7 @@ void SceneManager::clearScene(void)
     for (SceneNodeList::iterator i = mSceneNodes.begin();
         i != mSceneNodes.end(); ++i)
     {
-        OGRE_DELETE i->second;
+        OGRE_DELETE ITER_VAL(i);
     }
     mSceneNodes.clear();
     mAutoTrackingSceneNodes.clear();
@@ -824,15 +827,14 @@ SceneNode* SceneManager::createSceneNodeImpl(const String& name)
 SceneNode* SceneManager::createSceneNode(void)
 {
     SceneNode* sn = createSceneNodeImpl();
-    assert(mSceneNodes.find(sn->getName()) == mSceneNodes.end());
-    mSceneNodes[sn->getName()] = sn;
+    mSceneNodes.push_back(sn);
     return sn;
 }
 //-----------------------------------------------------------------------
 SceneNode* SceneManager::createSceneNode(const String& name)
 {
     // Check name not used
-    if (mSceneNodes.find(name) != mSceneNodes.end())
+    if (hasSceneNode(name))
     {
         OGRE_EXCEPT(
             Exception::ERR_DUPLICATE_ITEM,
@@ -841,17 +843,31 @@ SceneNode* SceneManager::createSceneNode(const String& name)
     }
 
     SceneNode* sn = createSceneNodeImpl(name);
-    mSceneNodes[sn->getName()] = sn;
+    mSceneNodes.push_back(sn);
     return sn;
 }
 //-----------------------------------------------------------------------
+struct SceneNodeNameExists {
+    const String& name;
+    bool operator()(const SceneNode* sn) {
+        return sn->getName() == name;
+    }
+};
 void SceneManager::destroySceneNode(const String& name)
 {
-    SceneNodeList::iterator i = mSceneNodes.find(name);
+    SceneNodeList::iterator i;
+    OgreAssert(!name.empty(), "name must not be empty");
+    SceneNodeNameExists pred = {name};
+    i = std::find_if(mSceneNodes.begin(), mSceneNodes.end(), pred);
+    _destroySceneNode(i);
+}
+
+void SceneManager::_destroySceneNode(SceneNodeList::iterator i)
+{
 
     if (i == mSceneNodes.end())
     {
-        OGRE_EXCEPT(Exception::ERR_ITEM_NOT_FOUND, "SceneNode '" + name + "' not found.",
+        OGRE_EXCEPT(Exception::ERR_ITEM_NOT_FOUND, "SceneNode '" + ITER_VAL(i)->getName() + "' not found.",
             "SceneManager::destroySceneNode");
     }
 
@@ -864,13 +880,13 @@ void SceneManager::destroySceneNode(const String& name)
         AutoTrackingSceneNodes::iterator curri = ai++;
         SceneNode* n = *curri;
         // Tracking this node
-        if (n->getAutoTrackTarget() == i->second)
+        if (n->getAutoTrackTarget() == ITER_VAL(i))
         {
             // turn off, this will notify SceneManager to remove
             n->setAutoTracking(false);
         }
         // node is itself a tracker
-        else if (n == i->second)
+        else if (n == ITER_VAL(i))
         {
             mAutoTrackingSceneNodes.erase(curri);
         }
@@ -878,13 +894,14 @@ void SceneManager::destroySceneNode(const String& name)
 
     // detach from parent (don't do this in destructor since bulk destruction
     // behaves differently)
-    Node* parentNode = i->second->getParent();
+    Node* parentNode = ITER_VAL(i)->getParent();
     if (parentNode)
     {
-        parentNode->removeChild(i->second);
+        parentNode->removeChild(ITER_VAL(i));
     }
-    OGRE_DELETE i->second;
-    mSceneNodes.erase(i);
+    OGRE_DELETE ITER_VAL(i);
+    std::swap(*i, mSceneNodes.back());
+    mSceneNodes.pop_back();
 }
 //---------------------------------------------------------------------
 void SceneManager::destroySceneNode(SceneNode* sn)
@@ -892,7 +909,7 @@ void SceneManager::destroySceneNode(SceneNode* sn)
     if(!sn)
         OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "Cannot destroy a null SceneNode.", "SceneManager::destroySceneNode");
 
-    destroySceneNode(sn->getName());
+    _destroySceneNode(std::find(mSceneNodes.begin(), mSceneNodes.end(), sn));
 }
 //-----------------------------------------------------------------------
 SceneNode* SceneManager::getRootSceneNode(void)
@@ -909,7 +926,10 @@ SceneNode* SceneManager::getRootSceneNode(void)
 //-----------------------------------------------------------------------
 SceneNode* SceneManager::getSceneNode(const String& name) const
 {
-    SceneNodeList::const_iterator i = mSceneNodes.find(name);
+    SceneNodeList::const_iterator i;
+    OgreAssert(!name.empty(), "name must not be empty");
+    SceneNodeNameExists pred = {name};
+    i = std::find_if(mSceneNodes.begin(), mSceneNodes.end(), pred);
 
     if (i == mSceneNodes.end())
     {
@@ -917,13 +937,15 @@ SceneNode* SceneManager::getSceneNode(const String& name) const
             "SceneManager::getSceneNode");
     }
 
-    return i->second;
+    return ITER_VAL(i);
 
 }
 //-----------------------------------------------------------------------
 bool SceneManager::hasSceneNode(const String& name) const
 {
-    return (mSceneNodes.find(name) != mSceneNodes.end());
+    OgreAssert(!name.empty(), "name must not be empty");
+    SceneNodeNameExists pred = {name};
+    return std::find_if(mSceneNodes.begin(), mSceneNodes.end(), pred) != mSceneNodes.end();
 }
 
 //-----------------------------------------------------------------------
@@ -1072,7 +1094,8 @@ const Pass* SceneManager::_setPass(const Pass* pass, bool evenIfSuppressed,
             // bind parameters later 
             passFogParams = pass->getFragmentProgram()->getPassFogStates();
         }
-        else if (!mDestRenderSystem->getCapabilities()->hasCapability(RSC_FIXED_FUNCTION))
+        else if (!mDestRenderSystem->getCapabilities()->hasCapability(RSC_FIXED_FUNCTION) &&
+                 !pass->hasGeometryProgram())
         {
             OGRE_EXCEPT(Exception::ERR_INVALID_STATE,
                         "RenderSystem does not support FixedFunction, "
@@ -1169,6 +1192,11 @@ const Pass* SceneManager::_setPass(const Pass* pass, bool evenIfSuppressed,
 
         if (mDestRenderSystem->getCapabilities()->hasCapability(RSC_POINT_SPRITES))
             mDestRenderSystem->_setPointSpritesEnabled(pass->getPointSpritesEnabled());
+
+        mAutoParamDataSource->setPointParameters(
+            pass->getPointSize(), pass->isPointAttenuationEnabled(),
+            pass->getPointAttenuationConstant(), pass->getPointAttenuationLinear(),
+            pass->getPointAttenuationQuadratic());
 
         // Texture unit settings
         size_t unit = 0;
@@ -1850,8 +1878,8 @@ void SceneManager::_setSkyBox(
         if (!m->getBestTechnique() || 
             !m->getBestTechnique()->getNumPasses())
         {
-            LogManager::getSingleton().logMessage(
-                "Warning, skybox material " + materialName + " is not supported, defaulting.", LML_CRITICAL);
+            LogManager::getSingleton().logWarning("skybox material " + materialName +
+                                                  " is not supported, defaulting");
             m = MaterialManager::getSingleton().getDefaultSettings();
         }
 
@@ -2004,21 +2032,19 @@ void SceneManager::_setSkyBox(
                 }
 
                 // section per material
-                mSkyBoxObj->begin(matName, RenderOperation::OT_TRIANGLE_LIST, groupName);
-                // top left
-                mSkyBoxObj->position(middle + up - right);
-                mSkyBoxObj->textureCoord(0,0);
+                mSkyBoxObj->begin(matName, RenderOperation::OT_TRIANGLE_STRIP, groupName);
                 // bottom left
                 mSkyBoxObj->position(middle - up - right);
                 mSkyBoxObj->textureCoord(0,1);
                 // bottom right
                 mSkyBoxObj->position(middle - up + right);
                 mSkyBoxObj->textureCoord(1,1);
+                // top left
+                mSkyBoxObj->position(middle + up - right);
+                mSkyBoxObj->textureCoord(0,0);
                 // top right
                 mSkyBoxObj->position(middle + up + right);
                 mSkyBoxObj->textureCoord(1,0);
-                
-                mSkyBoxObj->quad(0, 1, 2, 3);
 
                 mSkyBoxObj->end();
 
@@ -4309,9 +4335,9 @@ void SceneManager::setShadowTechnique(ShadowTechnique technique)
         // Otherwise forget it
         if (!mDestRenderSystem->getCapabilities()->hasCapability(RSC_HWSTENCIL))
         {
-            LogManager::getSingleton().logMessage(
-                "WARNING: Stencil shadows were requested, but this device does not "
-                "have a hardware stencil. Shadows disabled.", LML_CRITICAL);
+            LogManager::getSingleton().logWarning(
+                "Stencil shadows were requested, but this device does not "
+                "have a hardware stencil. Shadows disabled.");
             mShadowTechnique = SHADOWTYPE_NONE;
         }
         else if (!mShadowIndexBuffer)
@@ -4751,7 +4777,7 @@ void SceneManager::initShadowVolumeMaterials(void)
                     mInfiniteExtrusionParams->setNamedAutoConstant(
                         "light_position_object_space",
                         GpuProgramParameters::ACT_LIGHT_POSITION_OBJECT_SPACE);
-                } catch(InvalidParametersException& e) {} // ignore
+                } catch(InvalidParametersException&) {} // ignore
             }   
             matDebug->compile();
 
@@ -4808,7 +4834,7 @@ void SceneManager::initShadowVolumeMaterials(void)
                     mFiniteExtrusionParams->setNamedAutoConstant(
                         "shadow_extrusion_distance",
                         GpuProgramParameters::ACT_SHADOW_EXTRUSION_DISTANCE);
-                } catch(InvalidParametersException& e) {} // ignore
+                } catch(InvalidParametersException&) {} // ignore
             }
             matStencil->compile();
             // Nothing else, we don't use this like a 'real' pass anyway,
@@ -5646,6 +5672,9 @@ void SceneManager::renderShadowVolumesToStencil(const Light* light,
         mDestRenderSystem->unbindGpuProgram(GPT_GEOMETRY_PROGRAM);
     }
 
+    mDestRenderSystem->_setAlphaRejectSettings(mShadowStencilPass->getAlphaRejectFunction(),
+        mShadowStencilPass->getAlphaRejectValue(), mShadowStencilPass->isAlphaToCoverageEnabled());
+
     // Turn off colour writing and depth writing
     mDestRenderSystem->_setColourBufferWriteEnabled(false, false, false, false);
     mDestRenderSystem->_disableTextureUnitsFrom(0);
@@ -6128,32 +6157,42 @@ void SceneManager::setShadowTextureCasterMaterial(const String& name)
                 "Cannot locate material called '" + name + "'", 
                 "SceneManager::setShadowTextureCasterMaterial");
         }
-        mat->load();
-        if (!mat->getBestTechnique())
-        {
-            // unsupported
-            mShadowTextureCustomCasterPass = 0;
-        }
-        else
-        {
 
-            mShadowTextureCustomCasterPass = mat->getBestTechnique()->getPass(0);
-            if (mShadowTextureCustomCasterPass->hasVertexProgram())
-            {
-                // Save vertex program and params in case we have to swap them out
-                mShadowTextureCustomCasterVertexProgram = 
-                    mShadowTextureCustomCasterPass->getVertexProgramName();
-                mShadowTextureCustomCasterVPParams = 
-                    mShadowTextureCustomCasterPass->getVertexProgramParameters();
-            }
-            if (mShadowTextureCustomCasterPass->hasFragmentProgram())
-            {
-                // Save fragment program and params in case we have to swap them out
-                mShadowTextureCustomCasterFragmentProgram = 
-                mShadowTextureCustomCasterPass->getFragmentProgramName();
-                mShadowTextureCustomCasterFPParams = 
-                mShadowTextureCustomCasterPass->getFragmentProgramParameters();
-            }
+        setShadowTextureCasterMaterial(mat);
+    }
+}
+void SceneManager::setShadowTextureCasterMaterial(const MaterialPtr& mat)
+{
+    if(!mat) {
+        mShadowTextureCustomCasterPass = 0;
+        return;
+    }
+
+    mat->load();
+    if (!mat->getBestTechnique())
+    {
+        // unsupported
+        mShadowTextureCustomCasterPass = 0;
+    }
+    else
+    {
+
+        mShadowTextureCustomCasterPass = mat->getBestTechnique()->getPass(0);
+        if (mShadowTextureCustomCasterPass->hasVertexProgram())
+        {
+            // Save vertex program and params in case we have to swap them out
+            mShadowTextureCustomCasterVertexProgram =
+                mShadowTextureCustomCasterPass->getVertexProgramName();
+            mShadowTextureCustomCasterVPParams =
+                mShadowTextureCustomCasterPass->getVertexProgramParameters();
+        }
+        if (mShadowTextureCustomCasterPass->hasFragmentProgram())
+        {
+            // Save fragment program and params in case we have to swap them out
+            mShadowTextureCustomCasterFragmentProgram =
+            mShadowTextureCustomCasterPass->getFragmentProgramName();
+            mShadowTextureCustomCasterFPParams =
+            mShadowTextureCustomCasterPass->getFragmentProgramParameters();
         }
     }
 }
@@ -6173,40 +6212,50 @@ void SceneManager::setShadowTextureReceiverMaterial(const String& name)
                 "Cannot locate material called '" + name + "'", 
                 "SceneManager::setShadowTextureReceiverMaterial");
         }
-        mat->load();
-        if (!mat->getBestTechnique())
+
+        setShadowTextureReceiverMaterial(mat);
+    }
+}
+void SceneManager::setShadowTextureReceiverMaterial(const MaterialPtr& mat)
+{
+    if(!mat) {
+        mShadowTextureCustomReceiverPass = 0;
+        return;
+    }
+
+    mat->load();
+    if (!mat->getBestTechnique())
+    {
+        // unsupported
+        mShadowTextureCustomReceiverPass = 0;
+    }
+    else
+    {
+
+        mShadowTextureCustomReceiverPass = mat->getBestTechnique()->getPass(0);
+        if (mShadowTextureCustomReceiverPass->hasVertexProgram())
         {
-            // unsupported
-            mShadowTextureCustomReceiverPass = 0;
+            // Save vertex program and params in case we have to swap them out
+            mShadowTextureCustomReceiverVertexProgram =
+                mShadowTextureCustomReceiverPass->getVertexProgramName();
+            mShadowTextureCustomReceiverVPParams =
+                mShadowTextureCustomReceiverPass->getVertexProgramParameters();
         }
         else
         {
-
-            mShadowTextureCustomReceiverPass = mat->getBestTechnique()->getPass(0);
-            if (mShadowTextureCustomReceiverPass->hasVertexProgram())
-            {
-                // Save vertex program and params in case we have to swap them out
-                mShadowTextureCustomReceiverVertexProgram = 
-                    mShadowTextureCustomReceiverPass->getVertexProgramName();
-                mShadowTextureCustomReceiverVPParams = 
-                    mShadowTextureCustomReceiverPass->getVertexProgramParameters();
-            }
-            else
-            {
-                mShadowTextureCustomReceiverVertexProgram = BLANKSTRING;
-            }
-            if (mShadowTextureCustomReceiverPass->hasFragmentProgram())
-            {
-                // Save fragment program and params in case we have to swap them out
-                mShadowTextureCustomReceiverFragmentProgram = 
-                    mShadowTextureCustomReceiverPass->getFragmentProgramName();
-                mShadowTextureCustomReceiverFPParams = 
-                    mShadowTextureCustomReceiverPass->getFragmentProgramParameters();
-            }
-            else
-            {
-                mShadowTextureCustomReceiverFragmentProgram = BLANKSTRING;
-            }
+            mShadowTextureCustomReceiverVertexProgram = BLANKSTRING;
+        }
+        if (mShadowTextureCustomReceiverPass->hasFragmentProgram())
+        {
+            // Save fragment program and params in case we have to swap them out
+            mShadowTextureCustomReceiverFragmentProgram =
+                mShadowTextureCustomReceiverPass->getFragmentProgramName();
+            mShadowTextureCustomReceiverFPParams =
+                mShadowTextureCustomReceiverPass->getFragmentProgramParameters();
+        }
+        else
+        {
+            mShadowTextureCustomReceiverFragmentProgram = BLANKSTRING;
         }
     }
 }
@@ -6347,6 +6396,9 @@ void SceneManager::destroyShadowTextures(void)
     }
     mShadowTextures.clear();
     mShadowTextureCameras.clear();
+
+    // set by render*TextureShadowedQueueGroupObjects
+    mAutoParamDataSource->setTextureProjector(NULL, 0);
 
     // Will destroy if no other scene managers referencing
     ShadowTextureManager::getSingleton().clearUnused();

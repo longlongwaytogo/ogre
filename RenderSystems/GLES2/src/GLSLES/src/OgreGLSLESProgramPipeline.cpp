@@ -29,11 +29,10 @@
 #include "OgreGLSLESProgramPipeline.h"
 #include "OgreStringConverter.h"
 #include "OgreGLSLESProgram.h"
-#include "OgreGLSLESProgram.h"
-#include "OgreGLSLESProgramPipelineManager.h"
+#include "OgreGLSLESProgramManager.h"
 #include "OgreGpuProgramManager.h"
 #include "OgreGLES2RenderSystem.h"
-#include "OgreGLES2UniformCache.h"
+#include "OgreGLUniformCache.h"
 #include "OgreGLES2HardwareUniformBuffer.h"
 #include "OgreHardwareBufferManager.h"
 #include "OgreGLUtil.h"
@@ -48,7 +47,7 @@ namespace Ogre
     GLSLESProgramPipeline::~GLSLESProgramPipeline()
     {
 #if OGRE_PLATFORM != OGRE_PLATFORM_NACL
-        OGRE_CHECK_GL_ERROR(glDeleteProgramPipelinesEXT(1, &mGLProgramPipelineHandle));
+        OGRE_CHECK_GL_ERROR(glDeleteProgramPipelinesEXT(1, &mGLProgramHandle));
 #endif
     }
 
@@ -57,8 +56,8 @@ namespace Ogre
 #if OGRE_PLATFORM != OGRE_PLATFORM_NACL
         GLint linkStatus = 0;
         
-        OGRE_CHECK_GL_ERROR(glGenProgramPipelinesEXT(1, &mGLProgramPipelineHandle));
-        OGRE_CHECK_GL_ERROR(glBindProgramPipelineEXT(mGLProgramPipelineHandle));
+        OGRE_CHECK_GL_ERROR(glGenProgramPipelinesEXT(1, &mGLProgramHandle));
+        //OGRE_CHECK_GL_ERROR(glBindProgramPipelineEXT(mGLProgramHandle));
 
         // Compile and attach Vertex Program
         if(getVertexProgram())
@@ -84,8 +83,10 @@ namespace Ogre
                     mTriedToLinkAndFailed = true;
                     return;
                 }
-
                 GLuint programHandle = getVertexProgram()->getGLProgramHandle();
+
+                bindFixedAttributes( programHandle );
+
                 OGRE_CHECK_GL_ERROR(glProgramParameteriEXT(programHandle, GL_PROGRAM_SEPARABLE_EXT, GL_TRUE));
                 getVertexProgram()->attachToProgramObject(programHandle);
                 OGRE_CHECK_GL_ERROR(glLinkProgram(programHandle));
@@ -152,67 +153,34 @@ namespace Ogre
         {
             if(getVertexProgram() && getVertexProgram()->isLinked())
             {
-                OGRE_CHECK_GL_ERROR(glUseProgramStagesEXT(mGLProgramPipelineHandle, GL_VERTEX_SHADER_BIT_EXT, getVertexProgram()->getGLProgramHandle()));
+                OGRE_CHECK_GL_ERROR(glUseProgramStagesEXT(mGLProgramHandle, GL_VERTEX_SHADER_BIT_EXT, getVertexProgram()->getGLProgramHandle()));
                 _writeToCache(getVertexProgram()->getName(), getVertexProgram()->getGLProgramHandle());
             }
             if(mFragmentProgram && mFragmentProgram->isLinked())
             {
-                OGRE_CHECK_GL_ERROR(glUseProgramStagesEXT(mGLProgramPipelineHandle, GL_FRAGMENT_SHADER_BIT_EXT, mFragmentProgram->getGLProgramHandle()));
+                OGRE_CHECK_GL_ERROR(glUseProgramStagesEXT(mGLProgramHandle, GL_FRAGMENT_SHADER_BIT_EXT, mFragmentProgram->getGLProgramHandle()));
                 _writeToCache(mFragmentProgram->getName(), mFragmentProgram->getGLProgramHandle());
             }
 
             // Validate pipeline
-            GLSLES::logObjectInfo( getCombinedName() + String("GLSL program pipeline result : "), mGLProgramPipelineHandle );
+            GLSLES::logObjectInfo( getCombinedName() + String("GLSL program pipeline result : "), mGLProgramHandle );
             if(getVertexProgram() && mFragmentProgram && Root::getSingleton().getRenderSystem()->getCapabilities()->hasCapability(RSC_DEBUG))
             {
-                glLabelObjectEXT(GL_PROGRAM_PIPELINE_OBJECT_EXT, mGLProgramPipelineHandle, 0,
+                glLabelObjectEXT(GL_PROGRAM_PIPELINE_OBJECT_EXT, mGLProgramHandle, 0,
                              (getVertexProgram()->getName() + "/" + mFragmentProgram->getName()).c_str());
             }
         }
 #endif
     }
 
-    void GLSLESProgramPipeline::_useProgram(void)
+#if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
+    void GLSLESProgramPipeline::notifyOnContextLost()
     {
-        if (mLinked)
-        {
-#if OGRE_PLATFORM != OGRE_PLATFORM_NACL
-            OGRE_CHECK_GL_ERROR(glBindProgramPipelineEXT(mGLProgramPipelineHandle));
+        OGRE_CHECK_GL_ERROR(glDeleteProgramPipelinesEXT(1, &mGLProgramHandle));
+        mGLProgramHandle = 0;
+        GLSLESProgramCommon::notifyOnContextLost();
+    }
 #endif
-        }
-    }
-
-    //-----------------------------------------------------------------------
-    GLint GLSLESProgramPipeline::getAttributeIndex(VertexElementSemantic semantic, uint index)
-    {
-        GLint res = mCustomAttributesIndexes[semantic-1][index];
-        if (res == NULL_CUSTOM_ATTRIBUTES_INDEX)
-        {
-            GLuint handle = getVertexProgram()->getGLProgramHandle();
-            const char * attString = getAttributeSemanticString(semantic);
-            GLint attrib;
-            OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(handle, attString));
-
-            // Sadly position is a special case 
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX && semantic == VES_POSITION)
-            {
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(handle, "position"));
-            }
-            
-            // For uv and other case the index is a part of the name
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX)
-            {
-                String attStringWithSemantic = String(attString) + StringConverter::toString(index);
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(handle, attStringWithSemantic.c_str()));
-            }
-            
-            // Update mCustomAttributesIndexes with the index we found (or didn't find) 
-            mCustomAttributesIndexes[semantic-1][index] = attrib;
-            res = attrib;
-        }
-        
-        return res;
-    }
 
     //-----------------------------------------------------------------------
     void GLSLESProgramPipeline::activate(void)
@@ -248,7 +216,12 @@ namespace Ogre
             buildGLUniformReferences();
         }
 
-        _useProgram();
+        if (mLinked)
+        {
+#if OGRE_PLATFORM != OGRE_PLATFORM_NACL
+            OGRE_CHECK_GL_ERROR(glBindProgramPipelineEXT(mGLProgramHandle));
+#endif
+        }
     }
 
     //-----------------------------------------------------------------------
@@ -261,14 +234,16 @@ namespace Ogre
             if (getVertexProgram())
             {
                 vertParams = &(getVertexProgram()->getConstantDefinitions().map);
-                GLSLESProgramPipelineManager::getSingleton().extractUniforms(getVertexProgram()->getGLProgramHandle(),
-                    vertParams, NULL, mGLUniformReferences, mGLUniformBufferReferences);
+                GLSLESProgramManager::extractUniforms(getVertexProgram()->getGLProgramHandle(),
+                                                      vertParams, NULL, mGLUniformReferences,
+                                                      mGLUniformBufferReferences);
             }
             if (mFragmentProgram)
             {
                 fragParams = &(mFragmentProgram->getConstantDefinitions().map);
-                GLSLESProgramPipelineManager::getSingleton().extractUniforms(mFragmentProgram->getGLProgramHandle(),
-                                                                         NULL, fragParams, mGLUniformReferences, mGLUniformBufferReferences);
+                GLSLESProgramManager::extractUniforms(mFragmentProgram->getGLProgramHandle(), NULL,
+                                                      fragParams, mGLUniformReferences,
+                                                      mGLUniformBufferReferences);
             }
 
             mUniformRefsBuilt = true;
@@ -284,13 +259,16 @@ namespace Ogre
         GLUniformReferenceIterator endUniform = mGLUniformReferences.end();
 #if OGRE_PLATFORM != OGRE_PLATFORM_NACL
         GLuint progID = 0;
+        GLUniformCache* uniformCache=0;
         if(fromProgType == GPT_VERTEX_PROGRAM)
         {
             progID = getVertexProgram()->getGLProgramHandle();
+            uniformCache = getVertexProgram()->getUniformCache();
         }
         else if(fromProgType == GPT_FRAGMENT_PROGRAM)
         {
             progID = mFragmentProgram->getGLProgramHandle();
+            uniformCache = mFragmentProgram->getUniformCache();
         }
 
         for (;currentUniform != endUniform; ++currentUniform)
@@ -320,12 +298,12 @@ namespace Ogre
 #if OGRE_NO_GLES3_SUPPORT == 0
                         case GCT_SAMPLER2DARRAY:
 #endif
-                            shouldUpdate = mUniformCache->updateUniform(currentUniform->mLocation,
+                            shouldUpdate = uniformCache->updateUniform(currentUniform->mLocation,
                                                                         params->getIntPointer(def->physicalIndex),
                                                                         static_cast<GLsizei>(def->elementSize * def->arraySize * sizeof(int)));
                             break;
                         default:
-                            shouldUpdate = mUniformCache->updateUniform(currentUniform->mLocation,
+                            shouldUpdate = uniformCache->updateUniform(currentUniform->mLocation,
                                                                         params->getFloatPointer(def->physicalIndex),
                                                                         static_cast<GLsizei>(def->elementSize * def->arraySize * sizeof(float)));
                             break;
@@ -500,29 +478,15 @@ namespace Ogre
                 if (index == currentUniform->mConstantDef->physicalIndex)
                 {
 #if OGRE_PLATFORM != OGRE_PLATFORM_NACL
-
                     GLuint progID = 0;
                     if (getVertexProgram() && currentUniform->mSourceProgType == GPT_VERTEX_PROGRAM)
                     {
-                        if(!mUniformCache->updateUniform(currentUniform->mLocation,
-                                                                             params->getFloatPointer(index),
-                                                                             static_cast<GLsizei>(currentUniform->mConstantDef->elementSize *
-                                                                             currentUniform->mConstantDef->arraySize *
-                                                                             sizeof(float))))
-                            return;
-                        
                         progID = getVertexProgram()->getGLProgramHandle();
                         OGRE_CHECK_GL_ERROR(glProgramUniform1fvEXT(progID, currentUniform->mLocation, 1, params->getFloatPointer(index)));
                     }
                     
                     if (mFragmentProgram && currentUniform->mSourceProgType == GPT_FRAGMENT_PROGRAM)
                     {
-                        if(!mUniformCache->updateUniform(currentUniform->mLocation,
-                                                                               params->getFloatPointer(index),
-                                                                               static_cast<GLsizei>(currentUniform->mConstantDef->elementSize *
-                                                                               currentUniform->mConstantDef->arraySize *
-                                                                               sizeof(float))))
-                            return;
                         progID = mFragmentProgram->getGLProgramHandle();
                         OGRE_CHECK_GL_ERROR(glProgramUniform1fvEXT(progID, currentUniform->mLocation, 1, params->getFloatPointer(index)));
                     }

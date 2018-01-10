@@ -38,12 +38,15 @@ THE SOFTWARE.
 
 namespace Ogre {
 
-    class _OgrePrivate EAGLES2Context : public GLES2Context
+    class _OgrePrivate EAGLES2Context : public GLContext
     {
         protected:
 #ifdef __OBJC__
             CAEAGLLayer *mDrawable;
             EAGLContext *mContext;
+#else
+            void *mDrawablePlaceholder;
+            void *mContextPlaceholder;
 #endif
 
         public:
@@ -56,11 +59,10 @@ namespace Ogre {
 
             virtual void setCurrent();
             virtual void endCurrent();
-            virtual GLES2Context * clone() const;
+            virtual GLContext * clone() const;
 
             bool createFramebuffer();
             void destroyFramebuffer();
-            void bindSampleFramebuffer();
 
             /* The pixel dimensions of the backbuffer */
             GLint mBackingWidth;
@@ -77,6 +79,9 @@ namespace Ogre {
             GLsizei mNumSamples;
             GLuint mSampleFramebuffer;
             GLuint mSampleRenderbuffer;
+
+            /// Mask of buffers who contents can be discarded if GL_EXT_discard_framebuffer is supported
+            unsigned int mDiscardBuffers;
     };
 }
 

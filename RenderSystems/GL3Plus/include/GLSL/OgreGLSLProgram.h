@@ -34,7 +34,6 @@
 #include "OgreGL3PlusHardwareUniformBuffer.h"
 #include "OgreGL3PlusHardwareShaderStorageBuffer.h"
 #include "OgreGL3PlusHardwareCounterBuffer.h"
-#include "OgreGL3PlusVertexArrayObject.h"
 #include "OgreGLSLProgramCommon.h"
 #include "OgreGLSLShader.h"
 
@@ -67,17 +66,7 @@ namespace Ogre {
     class _OgreGL3PlusExport GLSLProgram : public GLSLProgramCommon
     {
     public:
-        /// Constructor should only be used by GLSLMonolithicProgramManager and GLSLSeparableProgramManager
-        GLSLProgram(GLSLShader* vertexProgram,
-                    GLSLShader* hullProgram,
-                    GLSLShader* domainProgram,
-                    GLSLShader* geometryProgram,
-                    GLSLShader* fragmentProgram,
-                    GLSLShader* computeProgram);
-        virtual ~GLSLProgram(void);
-
-        /// Get the index of a non-standard attribute bound in the linked code
-        virtual GLint getAttributeIndex(VertexElementSemantic semantic, uint index);
+        void bindFixedAttributes(GLuint program);
 
         GLSLShader* getVertexShader() const { return static_cast<GLSLShader*>(mVertexShader); }
         GLSLShader* getHullShader() const { return mHullShader; }
@@ -85,9 +74,29 @@ namespace Ogre {
         GLSLShader* getGeometryShader() const { return mGeometryShader; }
         GLSLShader* getFragmentShader() const { return mFragmentShader; }
         GLSLShader* getComputeShader() const { return mComputeShader; }
-        GL3PlusVertexArrayObject* getVertexArrayObject() { return mVertexArrayObject; }
 
+        bool isUsingShader(GLSLShaderCommon* shader) const
+        {
+            return mVertexShader == shader || (GLSLShaderCommon*)mGeometryShader == shader ||
+                   (GLSLShaderCommon*)mFragmentShader == shader ||
+                   (GLSLShaderCommon*)mHullShader == shader ||
+                   (GLSLShaderCommon*)mDomainShader == shader ||
+                   (GLSLShaderCommon*)mComputeShader == shader;
+        }
+
+        virtual void updateAtomicCounters(GpuProgramParametersSharedPtr params, uint16 mask,
+                                          GpuProgramType fromProgType) = 0;
+
+        void setTransformFeedbackVaryings(const std::vector<String>& nameStrings);
     protected:
+        /// Constructor should only be used by GLSLMonolithicProgramManager and GLSLSeparableProgramManager
+        GLSLProgram(GLSLShader* vertexProgram,
+                    GLSLShader* hullProgram,
+                    GLSLShader* domainProgram,
+                    GLSLShader* geometryProgram,
+                    GLSLShader* fragmentProgram,
+                    GLSLShader* computeProgram);
+
         /// Container of atomic counter uniform references that are active in the program object
         GLAtomicCounterReferenceList mGLAtomicCounterReferences;
         /// Map of shared parameter blocks to uniform buffer references
@@ -105,14 +114,10 @@ namespace Ogre {
         GLSLShader* mFragmentShader;
         /// Linked compute shader.
         GLSLShader* mComputeShader;
-        /// GL handle for the vertex array object
-        GL3PlusVertexArrayObject* mVertexArrayObject;
 
         Ogre::String getCombinedName(void);
         /// Get the the binary data of a program from the microcode cache
         void getMicrocodeFromCache(void);
-        // /// Put a program in use
-        // virtual void _useProgram(void) = 0;
     };
 
 

@@ -38,12 +38,10 @@ THE SOFTWARE.
 #include "OgreCamera.h"
 #include "OgreTechnique.h"
 #include "OgreManualObject.h"
-#include "OgreNameGenerator.h"
 #include "OgreMesh.h"
 
 namespace Ogre {
 
-    NameGenerator Node::msNameGenerator("Unnamed_");
     Node::QueuedUpdates Node::msQueuedUpdates;
     //-----------------------------------------------------------------------
     Node::Node()
@@ -67,9 +65,6 @@ namespace Ogre {
         mListener(0), 
         mDebug(0)
     {
-        // Generate a name
-        mName = msNameGenerator.generate();
-
         needUpdate();
 
     }
@@ -221,7 +216,7 @@ namespace Ogre {
                 itend = mChildren.end();
                 for (it = mChildren.begin(); it != itend; ++it)
                 {
-                    Node* child = it->second;
+                    Node* child = *it;
                     child->_update(true, true);
                 }
             }
@@ -322,6 +317,7 @@ namespace Ogre {
     //-----------------------------------------------------------------------
     Node* Node::createChild(const String& name, const Vector3& inTranslate, const Quaternion& inRotate)
     {
+        OgreAssert(!name.empty(), "name must not be empty");
         Node* newNode = createChildImpl(name);
         newNode->setPosition(inTranslate);
         newNode->setOrientation(inRotate);
@@ -340,7 +336,7 @@ namespace Ogre {
                 "Node::addChild");
         }
 
-        mChildren.insert(ChildNodeMap::value_type(child->getName(), child));
+        mChildren.push_back(child);
         child->setParent(this);
 
     }
@@ -349,9 +345,7 @@ namespace Ogre {
     {
         if( index < mChildren.size() )
         {
-            ChildNodeMap::const_iterator i = mChildren.begin();
-            while (index--) ++i;
-            return i->second;
+            return mChildren[index];
         }
         else
             return NULL;
@@ -362,12 +356,14 @@ namespace Ogre {
         if (index < mChildren.size())
         {
             ChildNodeMap::iterator i = mChildren.begin();
-            while (index--) ++i;
-            Node* ret = i->second;
+            i += index;
+            Node* ret = *i;
+
             // cancel any pending update
             cancelUpdate(ret);
 
-            mChildren.erase(i);
+            std::swap(*i, mChildren.back());
+            mChildren.pop_back();
             ret->setParent(NULL);
             return ret;
         }
@@ -385,14 +381,14 @@ namespace Ogre {
     {
         if (child)
         {
-            ChildNodeMap::iterator i = mChildren.find(child->getName());
-            // ensure it's our child
-            if (i != mChildren.end() && i->second == child)
+            ChildNodeMap::iterator i = std::find(mChildren.begin(), mChildren.end(), child);
+            if(i != mChildren.end() && *i == child)
             {
                 // cancel any pending update
                 cancelUpdate(child);
 
-                mChildren.erase(i);
+                std::swap(*i, mChildren.back());
+                mChildren.pop_back();
                 child->setParent(NULL);
             }
         }
@@ -665,7 +661,7 @@ namespace Ogre {
         iend = mChildren.end();
         for (i = mChildren.begin(); i != iend; ++i)
         {
-            i->second->setParent(0);
+            (*i)->setParent(0);
         }
         mChildren.clear();
         mChildrenToUpdate.clear();
@@ -728,22 +724,31 @@ namespace Ogre {
         needUpdate();
     }
     //-----------------------------------------------------------------------
+    struct NodeNameExists {
+        const String& name;
+        bool operator()(const Node* mo) {
+            return mo->getName() == name;
+        }
+    };
     Node* Node::getChild(const String& name) const
     {
-        ChildNodeMap::const_iterator i = mChildren.find(name);
+        NodeNameExists pred = {name};
+        ChildNodeMap::const_iterator i = std::find_if(mChildren.begin(), mChildren.end(), pred);
 
         if (i == mChildren.end())
         {
             OGRE_EXCEPT(Exception::ERR_ITEM_NOT_FOUND, "Child node named " + name +
                 " does not exist.", "Node::getChild");
         }
-        return i->second;
 
+        return *i;
     }
     //-----------------------------------------------------------------------
     Node* Node::removeChild(const String& name)
     {
-        ChildNodeMap::iterator i = mChildren.find(name);
+        OgreAssert(!name.empty(), "name must not be empty");
+        NodeNameExists pred = {name};
+        ChildNodeMap::iterator i = std::find_if(mChildren.begin(), mChildren.end(), pred);
 
         if (i == mChildren.end())
         {
@@ -751,11 +756,12 @@ namespace Ogre {
                 " does not exist.", "Node::removeChild");
         }
 
-        Node* ret = i->second;
+        Node* ret = *i;
+
         // Cancel any pending update
         cancelUpdate(ret);
-
-        mChildren.erase(i);
+        std::swap(*i, mChildren.back());
+        mChildren.pop_back();
         ret->setParent(NULL);
 
         return ret;

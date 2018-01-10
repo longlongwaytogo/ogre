@@ -215,7 +215,7 @@ class _OgreSampleClassExport Sample_Terrain : public SdkSample
         if (!mFly)
         {
             // clamp to terrain
-            Vector3 camPos = mCamera->getPosition();
+            Vector3 camPos = mCameraNode->getPosition();
             Ray ray;
             ray.setOrigin(Vector3(camPos.x, mTerrainPos.y + 10000, camPos.z));
             ray.setDirection(Vector3::NEGATIVE_UNIT_Y);
@@ -234,7 +234,7 @@ class _OgreSampleClassExport Sample_Terrain : public SdkSample
 
                 }
                 newy = std::max(rayResult.position.y + distanceAboveTerrain, newy);
-                mCamera->setPosition(camPos.x, newy, camPos.z);
+                mCameraNode->setPosition(camPos.x, newy, camPos.z);
 
             }
 
@@ -540,45 +540,6 @@ class _OgreSampleClassExport Sample_Terrain : public SdkSample
         defaultimp.layerList[2].textureNames.push_back("growth_weirdfungus-03_normalheight.dds");
     }
 
-    void addTextureDebugOverlay(TrayLocation loc, TexturePtr tex, size_t i)
-    {
-        addTextureDebugOverlay(loc, tex->getName(), i);
-    }
-    void addTextureDebugOverlay(TrayLocation loc, const String& texname, size_t i)
-    {
-        // Create material
-        String matName = "Ogre/DebugTexture" + StringConverter::toString(i);
-        MaterialPtr debugMat = MaterialManager::getSingleton().getByName(matName);
-        if (!debugMat)
-        {
-            debugMat = MaterialManager::getSingleton().create(matName,
-                                                              ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
-        }
-        Pass* p = debugMat->getTechnique(0)->getPass(0);
-        p->removeAllTextureUnitStates();
-        p->setLightingEnabled(false);
-        TextureUnitState *t = p->createTextureUnitState(texname);
-        t->setTextureAddressingMode(TextureUnitState::TAM_CLAMP);
-
-        // create template
-        if (!OverlayManager::getSingleton().hasOverlayElement("Ogre/DebugTexOverlay", true))
-        {
-            OverlayElement* e = OverlayManager::getSingleton().createOverlayElement("Panel", "Ogre/DebugTexOverlay", true);
-            e->setMetricsMode(GMM_PIXELS);
-            e->setWidth(128);
-            e->setHeight(128);
-        }
-
-        // add widget
-        String widgetName = "DebugTex"+ StringConverter::toString(i);
-        Widget* w = mTrayMgr->getWidget(widgetName);
-        if (!w)
-        {
-            w = mTrayMgr->createDecorWidget(loc, widgetName, "Ogre/DebugTexOverlay");
-        }
-        w->getOverlayElement()->setMaterialName(matName);
-    }
-
     void addTextureShadowDebugOverlay(TrayLocation loc, size_t num)
     {
         for (size_t i = 0; i < num; ++i)
@@ -681,7 +642,7 @@ class _OgreSampleClassExport Sample_Terrain : public SdkSample
                 mSceneMgr->setShadowTextureConfig(2, 1024, 1024, PF_X8B8G8R8);
                 mSceneMgr->setShadowTextureSelfShadow(false);
                 mSceneMgr->setShadowCasterRenderBackFaces(false);
-                mSceneMgr->setShadowTextureCasterMaterial(BLANKSTRING);
+                mSceneMgr->setShadowTextureCasterMaterial(MaterialPtr());
             }
 
             matProfile->setReceiveDynamicShadowsDepth(depthShadows);
@@ -704,8 +665,8 @@ class _OgreSampleClassExport Sample_Terrain : public SdkSample
     {
         SdkSample::setupView();
 
-        mCamera->setPosition(mTerrainPos + Vector3(1683, 50, 2116));
-        mCamera->lookAt(Vector3(1963, 50, 1660));
+        mCameraNode->setPosition(mTerrainPos + Vector3(1683, 50, 2116));
+        mCameraNode->lookAt(Vector3(1963, 50, 1660), Node::TS_PARENT);
         mCamera->setNearClipDistance(0.1);
         mCamera->setFarClipDistance(50000);
 

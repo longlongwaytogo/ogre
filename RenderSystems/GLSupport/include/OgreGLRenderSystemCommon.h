@@ -34,9 +34,16 @@ THE SOFTWARE.
 
 namespace Ogre {
     class GLContext;
+    class GLSLProgramCommon;
 
     class _OgreGLExport GLRenderSystemCommon : public RenderSystem
     {
+    protected:
+        /* The main GL context - main thread only */
+        GLContext* mMainContext;
+
+        /* The current GL context  - main thread only */
+        GLContext* mCurrentContext;
     public:
         virtual ~GLRenderSystemCommon() {}
 
@@ -45,7 +52,10 @@ namespace Ogre {
                                            RenderWindow::FrameBuffer buffer) = 0;
 
         /** Returns the main context */
-        virtual GLContext* _getMainContext() = 0;
+        GLContext* _getMainContext() { return mMainContext; }
+
+        /** Returns the current context */
+        GLContext* _getCurrentContext() { return mCurrentContext; }
 
         /** Unregister a render target->context mapping. If the context of target
             is the current context, change the context to the main context so it
@@ -55,6 +65,10 @@ namespace Ogre {
             GLContext.
         */
         virtual void _unregisterContext(GLContext *context) = 0;
+
+        virtual void bindVertexElementToGpu(const VertexElement& elem,
+                                            const HardwareVertexBufferSharedPtr& vertexBuffer,
+                                            const size_t vertexStart) = 0;
 
         Real getHorizontalTexelOffset(void) { return 0.0; }               // No offset in GL
         Real getVerticalTexelOffset(void) { return 0.0; }                 // No offset in GL
@@ -89,9 +103,22 @@ namespace Ogre {
         void _applyObliqueDepthProjection(Matrix4& matrix, const Plane& plane,
                                           bool forGpuProgram);
 
+        /** Create VAO on current context */
+        virtual uint32 _createVao() { return 0; }
+        /** Bind VAO, context should be equal to current context, as VAOs are not shared  */
+        virtual void _bindVao(GLContext* context, uint32 vao) {}
+        /** Destroy VAO immediately or defer if it was created on other context */
+        virtual void _destroyVao(GLContext* context, uint32 vao) {}
+        /** Destroy FBO immediately or defer if it was created on other context */
+        virtual void _destroyFbo(GLContext* context, uint32 fbo) {}
+        /** Complete destruction of VAOs and FBOs deferred while creator context was not current */
+        void _completeDeferredVaoFboDestruction();
+
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
-        static void _destroyInternalResources(RenderWindow* pRenderWnd);
-        static void _createInternalResources(RenderWindow* pRenderWnd, void* nativeWindow, void* config = NULL);
+        /// @deprecated use RenderWindow::_notifySurfaceDestroyed
+        OGRE_DEPRECATED static void _destroyInternalResources(RenderWindow* pRenderWnd);
+        /// @deprecated use RenderWindow::_notifySurfaceCreated
+        OGRE_DEPRECATED static void _createInternalResources(RenderWindow* pRenderWnd, void* nativeWindow, void* config = NULL);
 
         virtual void resetRenderer(RenderWindow* pRenderWnd) = 0;
         virtual void notifyOnContextLost() = 0;

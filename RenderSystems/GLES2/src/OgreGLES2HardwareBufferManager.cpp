@@ -30,9 +30,9 @@ THE SOFTWARE.
 #include "OgreGLES2HardwareVertexBuffer.h"
 #include "OgreGLES2HardwareIndexBuffer.h"
 #include "OgreGLES2HardwareUniformBuffer.h"
-#include "OgreGLES2VertexDeclaration.h"
 #include "OgreGLES2RenderToVertexBuffer.h"
 #include "OgreGLES2RenderSystem.h"
+#include "OgreGLVertexArrayObject.h"
 #include "OgreGLUtil.h"
 #include "OgreRoot.h"
 
@@ -40,7 +40,7 @@ namespace Ogre {
     //-----------------------------------------------------------------------
     GLES2HardwareBufferManagerBase::GLES2HardwareBufferManagerBase()
     {
-        mGLSupport = getGLES2SupportRef();
+        mRenderSystem = getGLES2RenderSystem();
     }
 
     GLES2HardwareBufferManagerBase::~GLES2HardwareBufferManagerBase()
@@ -49,21 +49,28 @@ namespace Ogre {
         destroyAllBindings();
     }
 
+    GLES2StateCacheManager * GLES2HardwareBufferManagerBase::getStateCacheManager()
+    {
+        return mRenderSystem->_getStateCacheManager();
+    }
+
+    void GLES2HardwareBufferManagerBase::notifyContextDestroyed(GLContext* context)
+    {
+        OGRE_LOCK_MUTEX(mVertexDeclarationsMutex);
+        for(VertexDeclarationList::iterator it = mVertexDeclarations.begin(), it_end = mVertexDeclarations.end(); it != it_end; ++it)
+            static_cast<GLVertexArrayObject*>(*it)->notifyContextDestroyed(context);
+    }
+
     HardwareVertexBufferSharedPtr
         GLES2HardwareBufferManagerBase::createVertexBuffer(size_t vertexSize,
                                                       size_t numVerts,
                                                       HardwareBuffer::Usage usage,
                                                       bool useShadowBuffer)
     {
-        GLES2HardwareVertexBuffer* buf = 0;
+        if(!mRenderSystem->getCapabilities()->hasCapability(RSC_MAPBUFFER))
+            useShadowBuffer = true;
 
-        if(!OGRE_NO_GLES3_SUPPORT
-                || mGLSupport->checkExtension("GL_EXT_map_buffer_range")
-                || mGLSupport->checkExtension("GL_OES_mapbuffer"))
-            buf = OGRE_NEW GLES2HardwareVertexBuffer(this, vertexSize, numVerts, usage, useShadowBuffer);
-        else
-            // always use shadowBuffer
-            buf = OGRE_NEW GLES2HardwareVertexBuffer(this, vertexSize, numVerts, usage, true);
+        GLES2HardwareVertexBuffer* buf = OGRE_NEW GLES2HardwareVertexBuffer(this, vertexSize, numVerts, usage, useShadowBuffer);
 
         {
             OGRE_LOCK_MUTEX(mVertexBuffersMutex);
@@ -77,14 +84,10 @@ namespace Ogre {
                                                                               HardwareBuffer::Usage usage,
                                                                               bool useShadowBuffer)
     {
-        GLES2HardwareIndexBuffer* buf = 0;
-        if(!OGRE_NO_GLES3_SUPPORT
-                || mGLSupport->checkExtension("GL_EXT_map_buffer_range")
-                || mGLSupport->checkExtension("GL_OES_mapbuffer"))
-            buf = OGRE_NEW GLES2HardwareIndexBuffer(this, itype, numIndexes, usage, useShadowBuffer);
-        else
-            // always use shadowBuffer
-            buf = OGRE_NEW GLES2HardwareIndexBuffer(this, itype, numIndexes, usage, true);
+        if(!mRenderSystem->getCapabilities()->hasCapability(RSC_MAPBUFFER))
+            useShadowBuffer = true;
+
+        GLES2HardwareIndexBuffer* buf = OGRE_NEW GLES2HardwareIndexBuffer(this, itype, numIndexes, usage, useShadowBuffer);
 
         {
             OGRE_LOCK_MUTEX(mIndexBuffersMutex);
@@ -95,46 +98,22 @@ namespace Ogre {
 
     RenderToVertexBufferSharedPtr GLES2HardwareBufferManagerBase::createRenderToVertexBuffer()
     {
-#if OGRE_NO_GLES3_SUPPORT == 0
-        return RenderToVertexBufferSharedPtr(new GLES2RenderToVertexBuffer());
-#else
+        if(mRenderSystem->hasMinGLVersion(3, 0))
+            return RenderToVertexBufferSharedPtr(new GLES2RenderToVertexBuffer());
+
         // not supported
         return RenderToVertexBufferSharedPtr();
-#endif
     }
 
     VertexDeclaration* GLES2HardwareBufferManagerBase::createVertexDeclarationImpl(void)
     {
-        return OGRE_NEW GLES2VertexDeclaration();
+        return OGRE_NEW GLVertexArrayObject();
     }
 
     void GLES2HardwareBufferManagerBase::destroyVertexDeclarationImpl(VertexDeclaration* decl)
     {
         if(decl)
             OGRE_DELETE decl;
-    }
-
-    GLenum GLES2HardwareBufferManagerBase::getGLUsage(unsigned int usage)
-    {
-        // this is also used with Textures, so unset non HBU related flags
-        usage = usage & ~(TU_AUTOMIPMAP | TU_RENDERTARGET);
-
-        switch(HardwareBuffer::Usage(usage))
-        {
-        case HardwareBuffer::HBU_STATIC:
-        case HardwareBuffer::HBU_WRITE_ONLY:
-        case HardwareBuffer::HBU_STATIC_WRITE_ONLY:
-            return GL_STATIC_DRAW;
-        case HardwareBuffer::HBU_DYNAMIC:
-        case HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY:
-            return GL_DYNAMIC_DRAW;
-        case HardwareBuffer::HBU_DISCARDABLE:
-        case HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY_DISCARDABLE:
-            return GL_STREAM_DRAW;
-        };
-
-        OgreAssert(false, "unknown usage flags");
-        return GL_DYNAMIC_DRAW;
     }
 
     GLenum GLES2HardwareBufferManagerBase::getGLType(VertexElementType type)
@@ -150,33 +129,35 @@ namespace Ogre {
             case VET_SHORT2:
             case VET_SHORT3:
             case VET_SHORT4:
+            case VET_SHORT2_NORM:
+            case VET_SHORT4_NORM:
                 return GL_SHORT;
             case VET_COLOUR:
             case VET_COLOUR_ABGR:
             case VET_COLOUR_ARGB:
             case VET_UBYTE4:
+            case VET_UBYTE4_NORM:
                 return GL_UNSIGNED_BYTE;
+            case VET_BYTE4:
+            case VET_BYTE4_NORM:
+                return GL_BYTE;
             case VET_INT1:
             case VET_INT2:
             case VET_INT3:
             case VET_INT4:
-#if OGRE_NO_GLES3_SUPPORT == 0
                 return GL_INT;
-#endif
             case VET_UINT1:
             case VET_UINT2:
             case VET_UINT3:
             case VET_UINT4:
-#if OGRE_NO_GLES3_SUPPORT == 0
                 return GL_UNSIGNED_INT;
-#endif
             case VET_USHORT1:
             case VET_USHORT2:
             case VET_USHORT3:
             case VET_USHORT4:
-#if OGRE_NO_GLES3_SUPPORT == 0
+            case VET_USHORT2_NORM:
+            case VET_USHORT4_NORM:
                 return GL_UNSIGNED_SHORT;
-#endif
             case VET_DOUBLE1:
             case VET_DOUBLE2:
             case VET_DOUBLE3:
@@ -191,19 +172,20 @@ namespace Ogre {
     //---------------------------------------------------------------------
     Ogre::HardwareUniformBufferSharedPtr GLES2HardwareBufferManagerBase::createUniformBuffer( size_t sizeBytes, HardwareBuffer::Usage usage, bool useShadowBuffer, const String& name )
     {
-#if OGRE_NO_GLES3_SUPPORT == 0
+        if(!mRenderSystem->hasMinGLVersion(3, 0))
+        {
+            OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR,
+                "GLES2 does not support uniform buffer objects",
+                "GLES2HardwareBufferManagerBase::createUniformBuffer");
+        }
+
         GLES2HardwareUniformBuffer* buf =
-        new GLES2HardwareUniformBuffer(this, sizeBytes, usage, useShadowBuffer, name);
+            new GLES2HardwareUniformBuffer(this, sizeBytes, usage, useShadowBuffer, name);
         {
             OGRE_LOCK_MUTEX(mUniformBuffersMutex);
             mUniformBuffers.insert(buf);
         }
         return HardwareUniformBufferSharedPtr(buf);
-#else
-        OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR,
-            "GLES2 does not support uniform buffer objects", 
-            "GLES2HardwareBufferManagerBase::createUniformBuffer");
-#endif
     }
     //---------------------------------------------------------------------
     Ogre::HardwareCounterBufferSharedPtr GLES2HardwareBufferManagerBase::createCounterBuffer( size_t sizeBytes, HardwareBuffer::Usage usage, bool useShadowBuffer, const String& name )

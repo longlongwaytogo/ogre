@@ -111,6 +111,7 @@ namespace Ogre
         file << "\t" << "compute_program_constant_int_count " << StringConverter::toString(caps->getComputeProgramConstantIntCount()) << endl;
         file << "\t" << "compute_program_constant_bool_count " << StringConverter::toString(caps->getComputeProgramConstantBoolCount()) << endl;
         file << "\t" << "num_vertex_texture_units " << StringConverter::toString(caps->getNumVertexTextureUnits()) << endl;
+        file << "\t" << "num_vertex_attributes " << StringConverter::toString(caps->getNumVertexAttributes()) << endl;
 
         file << endl;
 
@@ -412,6 +413,7 @@ namespace Ogre
         addCapabilitiesMapping("texture_compression_etc2", RSC_TEXTURE_COMPRESSION_ETC2);
         addCapabilitiesMapping("texture_compression_bc4_bc5", RSC_TEXTURE_COMPRESSION_BC4_BC5);
         addCapabilitiesMapping("texture_compression_bc6h_bc7", RSC_TEXTURE_COMPRESSION_BC6H_BC7);
+        addCapabilitiesMapping("texture_compression_astc", RSC_TEXTURE_COMPRESSION_ASTC);
         addCapabilitiesMapping("hwrender_to_vertex_buffer", RSC_HWRENDER_TO_VERTEX_BUFFER);
         addCapabilitiesMapping("gl1_5_novbo", RSC_GL1_5_NOVBO);
         addCapabilitiesMapping("fbo", RSC_FBO);
@@ -423,6 +425,8 @@ namespace Ogre
         addCapabilitiesMapping("vao", RSC_VAO);
         addCapabilitiesMapping("separate_shader_objects", RSC_SEPARATE_SHADER_OBJECTS);
         addCapabilitiesMapping("glsl_sso_redeclare", RSC_GLSL_SSO_REDECLARE);
+        addCapabilitiesMapping("debug", RSC_DEBUG);
+        addCapabilitiesMapping("mapbuffer", RSC_MAPBUFFER);
         addCapabilitiesMapping("automipmap_compressed", RSC_AUTOMIPMAP_COMPRESSED);
     }
 

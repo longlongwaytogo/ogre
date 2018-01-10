@@ -26,6 +26,7 @@ THE SOFTWARE.
 -----------------------------------------------------------------------------
 */
 #include "OgreGLRenderSystemCommon.h"
+#include "OgreGLContext.h"
 #include "OgreFrustum.h"
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
@@ -159,17 +160,40 @@ namespace Ogre {
         matrix[2][3] = c.w;
     }
 
+    void GLRenderSystemCommon::_completeDeferredVaoFboDestruction()
+    {
+        if(GLContext* ctx = mCurrentContext)
+        {
+            vector<uint32>::type& vaos = ctx->_getVaoDeferredForDestruction();
+            while(!vaos.empty())
+            {
+                _destroyVao(ctx, vaos.back());
+                vaos.pop_back();
+            }
+            
+            vector<uint32>::type& fbos = ctx->_getFboDeferredForDestruction();
+            while(!fbos.empty())
+            {
+                _destroyFbo(ctx, fbos.back());
+                fbos.pop_back();
+            }
+
+        }
+    }
+
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
     void GLRenderSystemCommon::_destroyInternalResources(RenderWindow* pRenderWnd)
     {
-        static_cast<EGLWindow*>(pRenderWnd)->_destroyInternalResources();
+        static_cast<EGLWindow*>(pRenderWnd)->_notifySurfaceDestroyed();
     }
 
     void GLRenderSystemCommon::_createInternalResources(RenderWindow* pRenderWnd, void* window,
                                                         void* config)
     {
+#if OGRE_PLATFORM != OGRE_PLATFORM_EMSCRIPTEN
         static_cast<EGLWindow*>(pRenderWnd)
-            ->_createInternalResources(reinterpret_cast<EGLNativeWindowType>(window), config);
+            ->_notifySurfaceCreated(reinterpret_cast<EGLNativeWindowType>(window), config);
+#endif
     }
 #endif
 }

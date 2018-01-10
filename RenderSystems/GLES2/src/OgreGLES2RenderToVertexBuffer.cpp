@@ -30,13 +30,11 @@ THE SOFTWARE.
 
 #include "OgreHardwareBufferManager.h"
 #include "OgreGLES2HardwareVertexBuffer.h"
-#include "OgreGLES2VertexDeclaration.h"
 #include "OgreRenderable.h"
 #include "OgreSceneManager.h"
 #include "OgreRoot.h"
 #include "OgreRenderSystem.h"
-#include "OgreGLSLESLinkProgramManager.h"
-#include "OgreGLSLESProgramPipelineManager.h"
+#include "OgreGLSLESProgramManager.h"
 #include "OgreStringConverter.h"
 #include "OgreTechnique.h"
 
@@ -253,17 +251,8 @@ namespace Ogre {
         {
             GLuint linkProgramId = 0;
             // Have GLSL shaders, using varying attributes
-            if(Root::getSingleton().getRenderSystem()->getCapabilities()->hasCapability(RSC_SEPARATE_SHADER_OBJECTS))
-            {
-                GLSLESProgramPipeline* programPipeline =
-                    GLSLESProgramPipelineManager::getSingleton().getActiveProgramPipeline();
-                linkProgramId = programPipeline->getGLProgramPipelineHandle();
-            }
-            else
-            {
-                GLSLESLinkProgram* linkProgram = GLSLESLinkProgramManager::getSingleton().getActiveLinkProgram();
-                linkProgramId = linkProgram->getGLProgramHandle();
-            }
+            GLSLESProgramCommon* linkProgram = GLSLESProgramManager::getSingleton().getActiveProgram();
+            linkProgramId = linkProgram->getGLProgramHandle();
 
             // Note: 64 is the minimum number of interleaved attributes allowed by GL_EXT_transform_feedback
             // So we are using it. Otherwise we could query during rendersystem initialisation and use a dynamic sized array.

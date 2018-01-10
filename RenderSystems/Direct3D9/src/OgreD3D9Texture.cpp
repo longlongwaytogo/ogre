@@ -1233,7 +1233,6 @@ namespace Ogre
                 if (mMipmapsHardwareGenerated)
                 {
                     usage |= D3DUSAGE_AUTOGENMIPMAP;
-                    numMips = 0;
                 }
             }
         }
@@ -1669,7 +1668,7 @@ namespace Ogre
         const D3DCAPS9& rkCurCaps = device->getD3D9DeviceCaps();                        
         D3DFORMAT eBackBufferFormat = device->getBackBufferFormat();
 
-        if (rkCurCaps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP == 0)
+        if ((rkCurCaps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP) == 0)
             return false;
 
         // check for auto gen. mip maps support
@@ -1869,9 +1868,9 @@ namespace Ogre
             }
             catch (...)
             {
-                mLoadingState.set(LOADSTATE_UNLOADED);
-                LogManager::getSingleton().stream() << "Warning: Failed to restore texture " << getName()
-                    << " on DeviceCreate.";
+                mLoadingState.store(LOADSTATE_UNLOADED);
+                LogManager::getSingleton().stream(LML_WARNING)
+                    << "Warning: Failed to restore texture " << getName() << " on DeviceCreate.";
             }
         }
     }

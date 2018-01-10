@@ -36,6 +36,8 @@ THE SOFTWARE.
 #include "OgreOSXCocoaView.h"
 #include "OgreOSXCocoaWindowDelegate.h"
 
+typedef NSUInteger NSWindowStyleMask; // NSWindowStyleMask was declared only since OSX 10.12 SDK
+
 @class CocoaWindowDelegate;
 
 @interface OgreGLWindow : NSWindow
@@ -64,6 +66,7 @@ namespace Ogre {
         String mWindowTitle;
         bool mUseOgreGLView;
         float mContentScalingFactor;
+        NSWindowStyleMask mStyleMask;
         
         int _getPixelFromPoint(int viewPt) const;
         void _setWindowParameters(unsigned int widthPt, unsigned int heightPt);

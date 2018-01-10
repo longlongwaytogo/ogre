@@ -53,21 +53,6 @@ list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/OgreFreeImageCode
     "${CMAKE_CURRENT_SOURCE_DIR}/src/OgreSTBICodec.cpp"
 )
 
-# Add threading (backport from 2.X)
-list(APPEND HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/Threading/OgreThreads.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/Threading/OgreBarrier.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/Threading/OgreLightweightMutex.h)
-	
-if(WIN32 AND NOT ANDROID)
-	list(APPEND SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Threading/OgreBarrierWin.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/src/Threading/OgreThreadsWin.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/src/Threading/OgreLightweightMutexWin.cpp)
-else()
-	list(APPEND SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Threading/OgreBarrierPThreads.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/src/Threading/OgreLightweightMutexPThreads.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/src/Threading/OgreThreadsPThreads.cpp)
-endif()
-
 # Add platform specific files
 if (OGRE_BUILD_PLATFORM_NACL)
   include_directories("include/NaCl")
@@ -109,17 +94,14 @@ elseif (WIN32)
   else ()
     include_directories("include/WIN32")
     set(PLATFORM_HEADERS
-      include/WIN32/OgreErrorDialogImp.h
       include/WIN32/OgreTimerImp.h
       include/WIN32/OgreMinGWSupport.h
       include/WIN32/OgreComPtr.h
     )
     
-    list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/OgreErrorDialogNoOp.cpp")
     set(PLATFORM_SOURCE_FILES
       src/WIN32/OgreOptimisedUtilDirectXMath.cpp
       src/WIN32/OgreConfigDialog.cpp
-      src/WIN32/OgreErrorDialog.cpp
       src/WIN32/OgreFileSystemLayer.cpp
       src/WIN32/OgreTimer.cpp
       src/WIN32/resource.h
@@ -165,7 +147,6 @@ elseif (APPLE)
     
     file(GLOB PLATFORM_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/include/OSX/*.h")
     
-    list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/OgreErrorDialogNoOp.cpp")
     file(GLOB PLATFORM_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/OSX/*.cpp"
       "${CMAKE_CURRENT_SOURCE_DIR}/src/OSX/*.mm"
       "${CMAKE_CURRENT_SOURCE_DIR}/src/OgrePOSIXTimer.cpp"
@@ -263,11 +244,6 @@ endif ()
 
 list(APPEND HEADER_FILES ${THREAD_HEADER_FILES})
 
-# Add needed definitions and nedmalloc include dir
-if(NOT OGRE_CONFIG_ALLOCATOR EQUAL 1)
-  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/nedmalloc)
-endif()
-
 set(LIBRARIES ${PLATFORM_LIBS})
 
 if (OGRE_CONFIG_THREADS)
@@ -286,7 +262,7 @@ if (OGRE_CONFIG_ENABLE_STBI)
   list(APPEND SOURCE_FILES src/OgreSTBICodec.cpp)
   
   if(UNIX)
-    set_source_files_properties(src/OgreSTBICodec.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-qual -Wno-unused-function")
+    set_source_files_properties(src/OgreSTBICodec.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-qual -Wno-unused-function -Wno-shadow -Wno-missing-declarations")
   endif()
   
   if(CMAKE_COMPILER_IS_GNUCXX)
@@ -308,6 +284,11 @@ endif ()
 if (OGRE_CONFIG_ENABLE_ETC)
   list(APPEND HEADER_FILES include/OgreETCCodec.h)
   list(APPEND SOURCE_FILES src/OgreETCCodec.cpp)
+endif ()
+
+if (OGRE_CONFIG_ENABLE_ASTC)
+  list(APPEND HEADER_FILES include/OgreASTCCodec.h)
+  list(APPEND SOURCE_FILES src/OgreASTCCodec.cpp)
 endif ()
 
 if (OGRE_CONFIG_ENABLE_ZIP)
@@ -376,37 +357,41 @@ if (APPLE)
 
     set(OGRE_OSX_BUILD_CONFIGURATION "$(PLATFORM_NAME)/$(CONFIGURATION)")
   
-  	add_custom_command(TARGET OgreMain POST_BUILD
-		COMMAND mkdir ARGS -p ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/Threading
-        COMMAND ditto 
-		${OGRE_SOURCE_DIR}/OgreMain/include/Threading/*.h ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/Threading
-		COMMAND mkdir ARGS -p ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/OSX
-        COMMAND ditto 
-		${OGRE_SOURCE_DIR}/OgreMain/include/OSX/*.h ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/OSX
-		COMMAND cd ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers
-		)
+    if(OGRE_BUILD_LIBS_AS_FRAMEWORKS)
+      add_custom_command(TARGET OgreMain POST_BUILD
+          COMMAND mkdir ARGS -p ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/Threading
+          COMMAND ditto
+          ${OGRE_SOURCE_DIR}/OgreMain/include/Threading/*.h ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/Threading
+          COMMAND mkdir ARGS -p ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/OSX
+          COMMAND ditto
+          ${OGRE_SOURCE_DIR}/OgreMain/include/OSX/*.h ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/OSX
+          COMMAND cd ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers
+          )
 
-    foreach(HEADER_PATH ${THREAD_HEADER_FILES})
-        get_filename_component(HEADER_FILE ${HEADER_PATH} NAME)
-        set(FWK_HEADER_PATH ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/${HEADER_FILE})
-        add_custom_command(TARGET OgreMain POST_BUILD
-            COMMAND rm -f ${FWK_HEADER_PATH}
-            )
-    endforeach()
+      foreach(HEADER_PATH ${THREAD_HEADER_FILES})
+          get_filename_component(HEADER_FILE ${HEADER_PATH} NAME)
+          set(FWK_HEADER_PATH ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/${HEADER_FILE})
+          add_custom_command(TARGET OgreMain POST_BUILD
+              COMMAND rm -f ${FWK_HEADER_PATH}
+              )
+      endforeach()
 
-    foreach(HEADER_PATH ${PLATFORM_HEADERS})
-        get_filename_component(HEADER_FILE ${HEADER_PATH} NAME)
-        set(FWK_HEADER_PATH ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/${HEADER_FILE})
-        add_custom_command(TARGET OgreMain POST_BUILD
-            COMMAND rm -f ${FWK_HEADER_PATH}
-            )
-    endforeach()
+      foreach(HEADER_PATH ${PLATFORM_HEADERS})
+          get_filename_component(HEADER_FILE ${HEADER_PATH} NAME)
+          set(FWK_HEADER_PATH ${OGRE_BINARY_DIR}/lib/${OGRE_OSX_BUILD_CONFIGURATION}/Ogre.framework/Headers/${HEADER_FILE})
+          add_custom_command(TARGET OgreMain POST_BUILD
+              COMMAND rm -f ${FWK_HEADER_PATH}
+              )
+      endforeach()
+    endif()
 
     ogre_config_framework(OgreMain)
   endif ()
 
-  # Framework is called 'Ogre'
-  set_target_properties(OgreMain PROPERTIES	OUTPUT_NAME Ogre)
+  if(OGRE_BUILD_LIBS_AS_FRAMEWORKS)
+    # Framework is called 'Ogre'
+    set_target_properties(OgreMain PROPERTIES	OUTPUT_NAME Ogre)
+  endif()
 endif ()
 target_link_libraries(OgreMain ${LIBRARIES})
 if (MINGW)

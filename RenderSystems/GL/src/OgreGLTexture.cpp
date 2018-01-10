@@ -27,7 +27,7 @@ THE SOFTWARE.
 */
 
 #include "OgreGLTexture.h"
-#include "OgreGLSupport.h"
+#include "OgreGLRenderSystem.h"
 #include "OgreGLPixelFormat.h"
 #include "OgreGLHardwarePixelBuffer.h"
 
@@ -60,9 +60,9 @@ namespace Ogre {
 
     GLTexture::GLTexture(ResourceManager* creator, const String& name, 
         ResourceHandle handle, const String& group, bool isManual, 
-        ManualResourceLoader* loader, GLSupport& support) 
+        ManualResourceLoader* loader, GLRenderSystem* renderSystem) 
         : GLTextureCommon(creator, name, handle, group, isManual, loader),
-          mGLSupport(support)
+          mRenderSystem(renderSystem)
     {
     }
 
@@ -123,7 +123,7 @@ namespace Ogre {
         mFormat = TextureManager::getSingleton().getNativeFormat(mTextureType, mFormat, mUsage);
         
         // Check requested number of mipmaps
-        size_t maxMips = GLPixelUtil::getMaxMipmaps(mWidth, mHeight, mDepth, mFormat);
+        uint32 maxMips = getMaxMipmaps();
         mNumMipmaps = mNumRequestedMipmaps;
         if(mNumMipmaps>maxMips)
             mNumMipmaps = maxMips;
@@ -136,31 +136,31 @@ namespace Ogre {
         glGenTextures( 1, &mTextureID );
         
         // Set texture type
-        mGLSupport.getStateCacheManager()->bindGLTexture( getGLTextureTarget(), mTextureID );
+        mRenderSystem->_getStateCacheManager()->bindGLTexture( getGLTextureTarget(), mTextureID );
         
         // This needs to be set otherwise the texture doesn't get rendered
         if (GLEW_VERSION_1_2)
-            mGLSupport.getStateCacheManager()->setTexParameteri(getGLTextureTarget(),
+            mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(),
                 GL_TEXTURE_MAX_LEVEL, mNumMipmaps);
         
         // Set some misc default parameters so NVidia won't complain, these can of course be changed later
-        mGLSupport.getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        mGLSupport.getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         if (GLEW_VERSION_1_2)
         {
-            mGLSupport.getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            mGLSupport.getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         }
 
         if((mUsage & TU_AUTOMIPMAP) &&
             mNumRequestedMipmaps && mMipmapsHardwareGenerated)
         {
-            mGLSupport.getStateCacheManager()->setTexParameteri( getGLTextureTarget(), GL_GENERATE_MIPMAP, GL_TRUE );
+            mRenderSystem->_getStateCacheManager()->setTexParameteri( getGLTextureTarget(), GL_GENERATE_MIPMAP, GL_TRUE );
         }
         
         // Allocate internal buffer so that glTexSubImageXD can be used
         // Internal format
-        GLenum internalformat = GLPixelUtil::getClosestGLInternalFormat(mFormat, mHwGamma);
+        GLenum internalformat = GLPixelUtil::getGLInternalFormat(mFormat, mHwGamma);
         uint32 width = mWidth;
         uint32 height = mHeight;
         uint32 depth = mDepth;
@@ -175,8 +175,7 @@ namespace Ogre {
             // Provide temporary buffer filled with zeroes as glCompressedTexImageXD does not
             // accept a 0 pointer like normal glTexImageXD
             // Run through this process for every mipmap to pregenerate mipmap piramid
-            uint8 *tmpdata = new uint8[size];
-            memset(tmpdata, 0, size);
+            vector<uint8>::type tmpdata(size);
             
             for(uint32 mip=0; mip<=mNumMipmaps; mip++)
             {
@@ -186,24 +185,24 @@ namespace Ogre {
                     case TEX_TYPE_1D:
                         glCompressedTexImage1DARB(GL_TEXTURE_1D, mip, internalformat, 
                             width, 0, 
-                            size, tmpdata);
+                            size, &tmpdata[0]);
                         break;
                     case TEX_TYPE_2D:
                         glCompressedTexImage2DARB(GL_TEXTURE_2D, mip, internalformat,
                             width, height, 0, 
-                            size, tmpdata);
+                            size, &tmpdata[0]);
                         break;
                     case TEX_TYPE_2D_ARRAY:
                     case TEX_TYPE_3D:
                         glCompressedTexImage3DARB(getGLTextureTarget(), mip, internalformat,
                             width, height, depth, 0, 
-                            size, tmpdata);
+                            size, &tmpdata[0]);
                         break;
                     case TEX_TYPE_CUBE_MAP:
                         for(int face=0; face<6; face++) {
                             glCompressedTexImage2DARB(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, mip, internalformat,
                                 width, height, 0, 
-                                size, tmpdata);
+                                size, &tmpdata[0]);
                         }
                         break;
                     case TEX_TYPE_2D_RECT:
@@ -216,7 +215,6 @@ namespace Ogre {
                 if(depth>1 && mTextureType != TEX_TYPE_2D_ARRAY)
                     depth = depth/2;
             }
-            delete [] tmpdata;
         }
         else
         {
@@ -294,8 +292,11 @@ namespace Ogre {
     void GLTexture::freeInternalResourcesImpl()
     {
         mSurfaceList.clear();
-        glDeleteTextures( 1, &mTextureID );
-        mGLSupport.getStateCacheManager()->invalidateStateForTexture( mTextureID );
+        if (GLStateCacheManager* stateCacheManager = mRenderSystem->_getStateCacheManager())
+        {
+            glDeleteTextures(1, &mTextureID);
+            stateCacheManager->invalidateStateForTexture(mTextureID);
+        }
     }
     
     //---------------------------------------------------------------------------------------------
@@ -303,26 +304,26 @@ namespace Ogre {
     {
         mSurfaceList.clear();
         
+        uint32 depth = mDepth;
+
         // For all faces and mipmaps, store surfaces as HardwarePixelBufferSharedPtr
         for(GLint face=0; face<static_cast<GLint>(getNumFaces()); face++)
         {
+            uint32 width = mWidth;
+            uint32 height = mHeight;
+
             for(uint32 mip=0; mip<=getNumMipmaps(); mip++)
             {
-                GLHardwarePixelBuffer *buf = new GLTextureBuffer(mGLSupport, mName, getGLTextureTarget(), mTextureID, face, mip,
-                        static_cast<HardwareBuffer::Usage>(mUsage), mHwGamma, mFSAA);
+                GLHardwarePixelBuffer* buf =
+                    new GLTextureBuffer(mRenderSystem, this, face, mip, width, height, depth);
                 mSurfaceList.push_back(HardwarePixelBufferSharedPtr(buf));
                 
-                /// Check for error
-                if(buf->getWidth()==0 || buf->getHeight()==0 || buf->getDepth()==0)
-                {
-                    OGRE_EXCEPT(
-                        Exception::ERR_RENDERINGAPI_ERROR, 
-                        "Zero sized texture surface on texture "+getName()+
-                            " face "+StringConverter::toString(face)+
-                            " mipmap "+StringConverter::toString(mip)+
-                            ". Probably, the GL driver refused to create the texture.", 
-                            "GLTexture::_createSurfaceList");
-                }
+                if (width > 1)
+                    width = width / 2;
+                if (height > 1)
+                    height = height / 2;
+                if (depth > 1 && mTextureType != TEX_TYPE_2D_ARRAY)
+                    depth = depth / 2;
             }
         }
     }

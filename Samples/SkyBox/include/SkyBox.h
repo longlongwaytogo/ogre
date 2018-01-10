@@ -25,7 +25,9 @@ protected:
     {
         // setup some basic lighting for our scene
         mSceneMgr->setAmbientLight(ColourValue(0.3, 0.3, 0.3));
-        mSceneMgr->createLight()->setPosition(20, 80, 50);
+        mSceneMgr->getRootSceneNode()
+            ->createChildSceneNode(Vector3(20, 80, 50))
+            ->attachObject(mSceneMgr->createLight());
         
         mSceneMgr->setSkyBox(true, "Examples/SpaceSkyBox", 5000);  // set our skybox
 
@@ -56,8 +58,8 @@ protected:
         mSceneMgr->getRootSceneNode()->createChildSceneNode(Vector3(0, 6.5, -67))->attachObject(thrusters);
 
         // set the camera's initial position and orientation
-        mCamera->setPosition(0, 0, 150);
-        mCamera->yaw(Degree(5));
+        mCameraNode->setPosition(0, 0, 150);
+        mCameraNode->yaw(Degree(5));
     }
 };
 

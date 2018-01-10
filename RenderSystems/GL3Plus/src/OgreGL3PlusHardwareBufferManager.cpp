@@ -33,7 +33,9 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 #include "OgreGL3PlusHardwareShaderStorageBuffer.h"
 #include "OgreGL3PlusHardwareVertexBuffer.h"
 #include "OgreGL3PlusRenderToVertexBuffer.h"
+#include "OgreGL3PlusRenderSystem.h"
 #include "OgreRoot.h"
+#include "OgreGLVertexArrayObject.h"
 
 namespace Ogre {
 
@@ -46,17 +48,18 @@ namespace Ogre {
         uint32 free: 1;
     };
 #define SCRATCH_POOL_SIZE 1 * 1024 * 1024
-#define SCRATCH_ALIGNMENT 32
 
     GL3PlusHardwareBufferManagerBase::GL3PlusHardwareBufferManagerBase()
         : mScratchBufferPool(NULL), mMapBufferThreshold(OGRE_GL_DEFAULT_MAP_BUFFER_THRESHOLD)
     {
+
+        mRenderSystem = static_cast<GL3PlusRenderSystem*>(Root::getSingleton().getRenderSystem());
+
         // Init scratch pool
         // TODO make it a configurable size?
         // 32-bit aligned buffer
-        mScratchBufferPool = static_cast<char*>(OGRE_MALLOC_ALIGN(SCRATCH_POOL_SIZE,
-                                                                  MEMCATEGORY_GEOMETRY,
-                                                                  SCRATCH_ALIGNMENT));
+        mScratchBufferPool = static_cast<char*>(OGRE_MALLOC_SIMD(SCRATCH_POOL_SIZE,
+                                                                  MEMCATEGORY_GEOMETRY));
         GL3PlusScratchBufferAlloc* ptrAlloc = (GL3PlusScratchBufferAlloc*)mScratchBufferPool;
         ptrAlloc->size = SCRATCH_POOL_SIZE - sizeof(GL3PlusScratchBufferAlloc);
         ptrAlloc->free = 1;
@@ -69,7 +72,19 @@ namespace Ogre {
         destroyAllDeclarations();
         destroyAllBindings();
 
-        OGRE_FREE_ALIGN(mScratchBufferPool, MEMCATEGORY_GEOMETRY, SCRATCH_ALIGNMENT);
+        OGRE_FREE_SIMD(mScratchBufferPool, MEMCATEGORY_GEOMETRY);
+    }
+
+    GL3PlusStateCacheManager * GL3PlusHardwareBufferManagerBase::getStateCacheManager()
+    {
+        return mRenderSystem->_getStateCacheManager();
+    }
+
+    void GL3PlusHardwareBufferManagerBase::notifyContextDestroyed(GLContext* context)
+    {
+        OGRE_LOCK_MUTEX(mVertexDeclarationsMutex);
+        for(VertexDeclarationList::iterator it = mVertexDeclarations.begin(), it_end = mVertexDeclarations.end(); it != it_end; ++it)
+            static_cast<GLVertexArrayObject*>(*it)->notifyContextDestroyed(context);
     }
 
     HardwareVertexBufferSharedPtr
@@ -139,27 +154,14 @@ namespace Ogre {
         return RenderToVertexBufferSharedPtr(new GL3PlusRenderToVertexBuffer);
     }
 
-    GLenum GL3PlusHardwareBufferManagerBase::getGLUsage(unsigned int usage)
+    VertexDeclaration* GL3PlusHardwareBufferManagerBase::createVertexDeclarationImpl(void)
     {
-        // this is also used with Textures, so unset non HBU related flags
-        usage = usage & ~(TU_AUTOMIPMAP | TU_RENDERTARGET);
+        return OGRE_NEW GLVertexArrayObject();
+    }
 
-        switch(HardwareBuffer::Usage(usage))
-        {
-        case HardwareBuffer::HBU_STATIC:
-        case HardwareBuffer::HBU_WRITE_ONLY:
-        case HardwareBuffer::HBU_STATIC_WRITE_ONLY:
-            return GL_STATIC_DRAW;
-        case HardwareBuffer::HBU_DYNAMIC:
-        case HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY:
-            return GL_DYNAMIC_DRAW;
-        case HardwareBuffer::HBU_DISCARDABLE:
-        case HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY_DISCARDABLE:
-            return GL_STREAM_DRAW;
-        };
-
-        OgreAssert(false, "unknown usage flags");
-        return GL_DYNAMIC_DRAW;
+    void GL3PlusHardwareBufferManagerBase::destroyVertexDeclarationImpl(VertexDeclaration* decl)
+    {
+        OGRE_DELETE decl;
     }
 
     GLenum GL3PlusHardwareBufferManagerBase::getGLType(VertexElementType type)
@@ -190,17 +192,25 @@ namespace Ogre {
         case VET_SHORT2:
         case VET_SHORT3:
         case VET_SHORT4:
+        case VET_SHORT2_NORM:
+        case VET_SHORT4_NORM:
             return GL_SHORT;
         case VET_USHORT1:
         case VET_USHORT2:
         case VET_USHORT3:
         case VET_USHORT4:
+        case VET_USHORT2_NORM:
+        case VET_USHORT4_NORM:
             return GL_UNSIGNED_SHORT;
         case VET_COLOUR:
         case VET_COLOUR_ABGR:
         case VET_COLOUR_ARGB:
         case VET_UBYTE4:
+        case VET_UBYTE4_NORM:
             return GL_UNSIGNED_BYTE;
+        case VET_BYTE4:
+        case VET_BYTE4_NORM:
+            return GL_BYTE;
         };
 
         OgreAssert(false, "unknown Vertex Element Type");

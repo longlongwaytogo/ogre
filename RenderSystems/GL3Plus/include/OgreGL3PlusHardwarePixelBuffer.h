@@ -35,6 +35,9 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 namespace Ogre {
     class _OgreGL3PlusExport GL3PlusHardwarePixelBuffer: public GLHardwarePixelBufferCommon
     {
+
+    protected:
+        GL3PlusRenderSystem* mRenderSystem;
     public:
         /// Should be called by HardwareBufferManager
         GL3PlusHardwarePixelBuffer(uint32 mWidth, uint32 mHeight, uint32 mDepth,
@@ -42,10 +45,10 @@ namespace Ogre {
                                HardwareBuffer::Usage usage);
 
         /// @copydoc HardwarePixelBuffer::blitFromMemory
-        void blitFromMemory(const PixelBox &src, const Image::Box &dstBox);
+        void blitFromMemory(const PixelBox &src, const Box &dstBox);
 
         /// @copydoc HardwarePixelBuffer::blitToMemory
-        void blitToMemory(const Image::Box &srcBox, const PixelBox &dst);
+        void blitToMemory(const Box &srcBox, const PixelBox &dst);
     };
 
     /** Renderbuffer surface.  Needs FBO extension.

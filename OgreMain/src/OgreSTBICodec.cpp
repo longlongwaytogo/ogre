@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include "OgreSTBICodec.h"
 #include "OgreException.h"
 #include "OgreLogManager.h"
+#include "OgrePlatformInformation.h"
 
 #if __OGRE_HAVE_NEON
 #define STBI_NEON
@@ -54,10 +55,10 @@ namespace Ogre {
         stbi_convert_iphone_png_to_rgb(1);
         stbi_set_unpremultiply_on_load(1);
 
-        LogManager::getSingleton().logMessage(LML_NORMAL, "stb_image - v2.12 - public domain JPEG/PNG reader");
+        LogManager::getSingleton().logMessage(LML_NORMAL, "stb_image - v2.15 - public domain JPEG/PNG reader");
         
         // Register codecs
-        String exts = "jpeg,jpg,png,bmp,psd,tga,gif,pic,ppm,pgm";
+        String exts = "jpeg,jpg,png,bmp,psd,tga,gif,pic,ppm,pgm,hdr";
         StringVector extsVector = StringUtil::split(exts, ",");
         for (StringVector::iterator v = extsVector.begin(); v != extsVector.end(); ++v)
         {
@@ -90,7 +91,8 @@ namespace Ogre {
     { 
     }
     //---------------------------------------------------------------------
-    DataStreamPtr STBIImageCodec::encode(MemoryDataStreamPtr& input, Codec::CodecDataPtr& pData) const
+    DataStreamPtr STBIImageCodec::encode(const MemoryDataStreamPtr& input,
+                                         const Codec::CodecDataPtr& pData) const
     {
         if(mType != "png") {
             OGRE_EXCEPT(Exception::ERR_NOT_IMPLEMENTED,
@@ -99,11 +101,34 @@ namespace Ogre {
         }
 
         ImageData* pImgData = static_cast<ImageData*>(pData.get());
-        int channels = PixelUtil::getComponentCount(pImgData->format);
+        PixelFormat format = pImgData->format;
+        uchar* inputData = input->getPtr();
 
+        // Convert image data to ABGR format for STBI (unless it's already compatible)
+        uchar* tempData = 0;
+        if(format != Ogre::PF_A8B8G8R8 && format != PF_B8G8R8 && format != PF_BYTE_LA && 
+            format != PF_L8 && format != PF_R8)
+        {   
+            format = Ogre::PF_A8B8G8R8;
+            size_t tempDataSize = pImgData->width * pImgData->height * pImgData->depth * Ogre::PixelUtil::getNumElemBytes(format);
+            tempData = OGRE_ALLOC_T(unsigned char, tempDataSize, Ogre::MEMCATEGORY_GENERAL);
+            Ogre::PixelBox pbIn(pImgData->width, pImgData->height, pImgData->depth, pImgData->format, inputData);
+            Ogre::PixelBox pbOut(pImgData->width, pImgData->height, pImgData->depth, format, tempData);
+            PixelUtil::bulkPixelConversion(pbIn, pbOut);
+
+            inputData = tempData;
+        }
+
+        // Save to PNG
+        int channels = (int)PixelUtil::getComponentCount(format);
+        int stride = pImgData->width * (int)PixelUtil::getNumElemBytes(format);
         int len;
-        uchar *data = stbi_write_png_to_mem(input->getPtr(), pImgData->width*channels,
-                pImgData->width, pImgData->height, channels, &len);
+        uchar* data = stbi_write_png_to_mem(inputData, stride, pImgData->width, pImgData->height, channels, &len);
+
+        if(tempData)
+        {
+            OGRE_FREE(tempData, MEMCATEGORY_GENERAL);
+        }
 
         if (!data) {
             OGRE_EXCEPT(Exception::ERR_INTERNAL_ERROR,
@@ -114,9 +139,10 @@ namespace Ogre {
         return DataStreamPtr(new MemoryDataStream(data, len, true));
     }
     //---------------------------------------------------------------------
-    void STBIImageCodec::encodeToFile(MemoryDataStreamPtr& input,
-        const String& outFileName, Codec::CodecDataPtr& pData) const
+    void STBIImageCodec::encodeToFile(const MemoryDataStreamPtr& input, const String& outFileName,
+                                      const Codec::CodecDataPtr& pData) const
     {
+#if OGRE_PLATFORM != OGRE_PLATFORM_EMSCRIPTEN
         MemoryDataStreamPtr data = static_pointer_cast<MemoryDataStream>(encode(input, pData));
         std::ofstream f(outFileName.c_str(), std::ios::out | std::ios::binary);
 
@@ -127,16 +153,16 @@ namespace Ogre {
         }
 
         f.write((char*)data->getPtr(), data->size());
+#endif
     }
     //---------------------------------------------------------------------
-    Codec::DecodeResult STBIImageCodec::decode(DataStreamPtr& input) const
+    Codec::DecodeResult STBIImageCodec::decode(const DataStreamPtr& input) const
     {
-        // Buffer stream into memory (TODO: override IO functions instead?)
-        MemoryDataStream memStream(input, true);
+        String contents = input->getAsString();
 
         int width, height, components;
-        stbi_uc* pixelData = stbi_load_from_memory(memStream.getPtr(),
-                static_cast<int>(memStream.size()), &width, &height, &components, 0);
+        stbi_uc* pixelData = stbi_load_from_memory((uchar*)contents.data(),
+                static_cast<int>(contents.size()), &width, &height, &components, 0);
 
         if (!pixelData)
         {

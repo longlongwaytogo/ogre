@@ -41,19 +41,8 @@ namespace Ogre {
     : GLSLProgramCommon(vertexProgram)
     , mFragmentProgram(fragmentProgram)
     {
-        // Initialise uniform cache
-        mUniformCache = new GLES2UniformCache();
     }
-    
-    //-----------------------------------------------------------------------
-    GLSLESProgramCommon::~GLSLESProgramCommon(void)
-    {
-        OGRE_CHECK_GL_ERROR(glDeleteProgram(mGLProgramHandle));
 
-        delete mUniformCache;
-        mUniformCache = 0;
-    }
-    
     //-----------------------------------------------------------------------
     Ogre::String GLSLESProgramCommon::getCombinedName()
     {
@@ -72,36 +61,23 @@ namespace Ogre {
 
         return name;
     }
-    
-    //-----------------------------------------------------------------------
-    GLint GLSLESProgramCommon::getAttributeIndex(VertexElementSemantic semantic, uint index)
+
+    void GLSLESProgramCommon::bindFixedAttributes(GLuint program)
     {
-        GLint res = mCustomAttributesIndexes[semantic-1][index];
-        if (res == NULL_CUSTOM_ATTRIBUTES_INDEX)
+        GLint maxAttribs = Root::getSingleton().getRenderSystem()->getCapabilities()->getNumVertexAttributes();
+
+        size_t numAttribs = sizeof(msCustomAttributes) / sizeof(CustomAttribute);
+        for (size_t i = 0; i < numAttribs; ++i)
         {
-            const char * attString = getAttributeSemanticString(semantic);
-            GLint attrib;
-            OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(mGLProgramHandle, attString));
-
-            // sadly position is a special case 
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX && semantic == VES_POSITION)
+            const CustomAttribute& a = msCustomAttributes[i];
+            if (a.attrib < maxAttribs)
             {
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(mGLProgramHandle, "position"));
-            }
 
-            // for uv and other case the index is a part of the name
-            if (attrib == NOT_FOUND_CUSTOM_ATTRIBUTES_INDEX)
-            {
-                String attStringWithSemantic = String(attString) + StringConverter::toString(index);
-                OGRE_CHECK_GL_ERROR(attrib = glGetAttribLocation(mGLProgramHandle, attStringWithSemantic.c_str()));
+                OGRE_CHECK_GL_ERROR(glBindAttribLocation(program, a.attrib, a.name));
             }
-
-            // update mCustomAttributesIndexes with the index we found (or didn't find) 
-            mCustomAttributesIndexes[semantic-1][index] = attrib;
-            res = attrib;
         }
-        return res;
     }
+
     //-----------------------------------------------------------------------
     bool GLSLESProgramCommon::getMicrocodeFromCache(const String& name, GLuint programHandle)
     {
@@ -161,4 +137,20 @@ namespace Ogre {
         // Add to the microcode to the cache
         GpuProgramManager::getSingleton().addMicrocodeToCache(name, newMicrocode);
     }
+
+#if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
+    void GLSLESProgramCommon::notifyOnContextLost()
+    {
+        mLinked = false;
+        mTriedToLinkAndFailed = false;
+        mUniformRefsBuilt = false;
+        getVertexProgram()->getUniformCache()->clearCache();
+        mFragmentProgram->getUniformCache()->clearCache();
+    }
+
+    void GLSLESProgramCommon::notifyOnContextReset()
+    {
+        activate();
+    }
+#endif
 } // namespace Ogre

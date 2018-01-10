@@ -3,11 +3,12 @@
 
 namespace OgreBites {
 
-CameraMan::CameraMan(Ogre::Camera *cam)
+CameraMan::CameraMan(Ogre::SceneNode *cam)
     : mCamera(0)
+    , mStyle(CS_MANUAL)
     , mTarget(0)
     , mOrbiting(false)
-    , mZooming(false)
+    , mMoving(false)
     , mTopSpeed(150)
     , mVelocity(Ogre::Vector3::ZERO)
     , mGoingForward(false)
@@ -17,67 +18,61 @@ CameraMan::CameraMan(Ogre::Camera *cam)
     , mGoingUp(false)
     , mGoingDown(false)
     , mFastMove(false)
+    , mOffset(0, 0, 0)
 {
 
     setCamera(cam);
     setStyle(CS_FREELOOK);
 }
 
-void CameraMan::setCamera(Ogre::Camera *cam)
+void CameraMan::setCamera(Ogre::SceneNode *cam)
 {
     mCamera = cam;
 }
 
 void CameraMan::setTarget(Ogre::SceneNode *target)
 {
-    if (target != mTarget)
-    {
-        mTarget = target;
-        if(target)
-        {
-            setYawPitchDist(Ogre::Degree(0), Ogre::Degree(15), 150);
-            mCamera->setAutoTracking(true, mTarget);
-        }
-        else
-        {
-            mCamera->setAutoTracking(false);
-        }
+    if (target == mTarget)
+        return;
 
-    }
-
-
+    mTarget = target;
 }
 
 void CameraMan::setYawPitchDist(Ogre::Radian yaw, Ogre::Radian pitch, Ogre::Real dist)
 {
+    OgreAssert(mTarget, "no target set");
+
+    mOffset = Ogre::Vector3::ZERO;
     mCamera->setPosition(mTarget->_getDerivedPosition());
     mCamera->setOrientation(mTarget->_getDerivedOrientation());
     mCamera->yaw(yaw);
     mCamera->pitch(-pitch);
-    mCamera->moveRelative(Ogre::Vector3(0, 0, dist));
+    mCamera->translate(Ogre::Vector3(0, 0, dist), Ogre::Node::TS_LOCAL);
 }
 
 void CameraMan::setStyle(CameraStyle style)
 {
     if (mStyle != CS_ORBIT && style == CS_ORBIT)
     {
-        setTarget(mTarget ? mTarget : mCamera->getSceneManager()->getRootSceneNode());
-        mCamera->setFixedYawAxis(true);
+        setTarget(mTarget ? mTarget : mCamera->getCreator()->getRootSceneNode());
+        mCamera->setFixedYawAxis(true); // also fix axis with lookAt calls
         manualStop();
-        setYawPitchDist(Ogre::Degree(0), Ogre::Degree(15), 150);
+
+        // try to replicate the camera configuration
+        Ogre::Real dist = getDistToTarget();
+        const Ogre::Quaternion& q = mCamera->getOrientation();
+        setYawPitchDist(q.getYaw(), q.getPitch(), dist == 0 ? 150 : dist); // enforce some distance
     }
     else if (mStyle != CS_FREELOOK && style == CS_FREELOOK)
     {
-        mCamera->setAutoTracking(false);
-        mCamera->setFixedYawAxis(true);
+        mCamera->setFixedYawAxis(true); // also fix axis with lookAt calls
     }
     else if (mStyle != CS_MANUAL && style == CS_MANUAL)
     {
-        mCamera->setAutoTracking(false);
         manualStop();
     }
     mStyle = style;
-
+    mCamera->setAutoTracking(false);
 }
 
 void CameraMan::manualStop()
@@ -100,12 +95,13 @@ void CameraMan::frameRendered(const Ogre::FrameEvent &evt)
     {
         // build our acceleration vector based on keyboard input composite
         Ogre::Vector3 accel = Ogre::Vector3::ZERO;
-        if (mGoingForward) accel += mCamera->getDirection();
-        if (mGoingBack) accel -= mCamera->getDirection();
-        if (mGoingRight) accel += mCamera->getRight();
-        if (mGoingLeft) accel -= mCamera->getRight();
-        if (mGoingUp) accel += mCamera->getUp();
-        if (mGoingDown) accel -= mCamera->getUp();
+        Ogre::Matrix3 axes = mCamera->getLocalAxes();
+        if (mGoingForward) accel -= axes.GetColumn(2);
+        if (mGoingBack) accel += axes.GetColumn(2);
+        if (mGoingRight) accel += axes.GetColumn(0);
+        if (mGoingLeft) accel -= axes.GetColumn(0);
+        if (mGoingUp) accel += axes.GetColumn(1);
+        if (mGoingDown) accel -= axes.GetColumn(1);
 
         // if accelerating, try to reach top speed in a certain time
         Ogre::Real topSpeed = mFastMove ? mTopSpeed * 20 : mTopSpeed;
@@ -128,7 +124,7 @@ void CameraMan::frameRendered(const Ogre::FrameEvent &evt)
         else if (mVelocity.squaredLength() < tooSmall * tooSmall)
             mVelocity = Ogre::Vector3::ZERO;
 
-        if (mVelocity != Ogre::Vector3::ZERO) mCamera->move(mVelocity * evt.timeSinceLastFrame);
+        if (mVelocity != Ogre::Vector3::ZERO) mCamera->translate(mVelocity * evt.timeSinceLastFrame);
     }
 }
 
@@ -166,32 +162,40 @@ bool CameraMan::keyReleased(const KeyboardEvent &evt)
     return InputListener::keyReleased(evt);
 }
 
+Ogre::Real CameraMan::getDistToTarget()
+{
+    Ogre::Vector3 offset = mCamera->getPosition() - mTarget->_getDerivedPosition() - mOffset;
+    return offset.length();
+}
+
 bool CameraMan::mouseMoved(const MouseMotionEvent &evt)
 {
     if (mStyle == CS_ORBIT)
     {
-        Ogre::Real dist = (mCamera->getPosition() - mTarget->_getDerivedPosition()).length();
+        Ogre::Real dist = getDistToTarget();
 
         if (mOrbiting)   // yaw around the target, and pitch locally
         {
-            mCamera->setPosition(mTarget->_getDerivedPosition());
+            mCamera->setPosition(mTarget->_getDerivedPosition() + mOffset);
 
-            mCamera->yaw(Ogre::Degree(-evt.xrel * 0.25f));
+            mCamera->yaw(Ogre::Degree(-evt.xrel * 0.25f), Ogre::Node::TS_PARENT);
             mCamera->pitch(Ogre::Degree(-evt.yrel * 0.25f));
 
-            mCamera->moveRelative(Ogre::Vector3(0, 0, dist));
-
+            mCamera->translate(Ogre::Vector3(0, 0, dist), Ogre::Node::TS_LOCAL);
             // don't let the camera go over the top or around the bottom of the target
         }
-        else if (mZooming)  // move the camera toward or away from the target
+        else if (mMoving)  // move the camera along the image plane
         {
+            Ogre::Vector3 delta = mCamera->getOrientation() * Ogre::Vector3(-evt.xrel, evt.yrel, 0);
             // the further the camera is, the faster it moves
-            mCamera->moveRelative(Ogre::Vector3(0, 0, evt.yrel * 0.004f * dist));
+            delta *= dist / 1000.0f;
+            mOffset += delta;
+            mCamera->translate(delta);
         }
     }
     else if (mStyle == CS_FREELOOK)
     {
-        mCamera->yaw(Ogre::Degree(-evt.xrel * 0.15f));
+        mCamera->yaw(Ogre::Degree(-evt.xrel * 0.15f), Ogre::Node::TS_PARENT);
         mCamera->pitch(Ogre::Degree(-evt.yrel * 0.15f));
     }
 
@@ -202,7 +206,7 @@ bool CameraMan::mouseWheelRolled(const MouseWheelEvent &evt) {
     if (mStyle == CS_ORBIT && evt.y != 0)
     {
         Ogre::Real dist = (mCamera->getPosition() - mTarget->_getDerivedPosition()).length();
-        mCamera->moveRelative(Ogre::Vector3(0, 0, -evt.y * 0.08f * dist));
+        mCamera->translate(Ogre::Vector3(0, 0, -evt.y * 0.08f * dist), Ogre::Node::TS_LOCAL);
     }
 
     return InputListener::mouseWheelRolled(evt);
@@ -213,7 +217,7 @@ bool CameraMan::mousePressed(const MouseButtonEvent &evt)
     if (mStyle == CS_ORBIT)
     {
         if (evt.button == BUTTON_LEFT) mOrbiting = true;
-        else if (evt.button == BUTTON_RIGHT) mZooming = true;
+        else if (evt.button == BUTTON_RIGHT) mMoving = true;
     }
 
     return InputListener::mousePressed(evt);
@@ -224,7 +228,7 @@ bool CameraMan::mouseReleased(const MouseButtonEvent &evt)
     if (mStyle == CS_ORBIT)
     {
         if (evt.button == BUTTON_LEFT) mOrbiting = false;
-        else if (evt.button == BUTTON_RIGHT) mZooming = false;
+        else if (evt.button == BUTTON_RIGHT) mMoving = false;
     }
 
     return InputListener::mouseReleased(evt);

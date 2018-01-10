@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "OgrePrerequisites.h"
 #include "OgreHardwareBuffer.h"
 #include "OgreSharedPtr.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
     class HardwareBufferManagerBase;
@@ -61,15 +62,8 @@ namespace Ogre {
 
     };
 
-    /** Shared pointer implementation used to share counter buffers. */
-    class _OgreExport HardwareCounterBufferSharedPtr : public SharedPtr<HardwareCounterBuffer>
-    {
-    public:
-        HardwareCounterBufferSharedPtr() : SharedPtr<HardwareCounterBuffer>() {}
-        explicit HardwareCounterBufferSharedPtr(HardwareCounterBuffer* buf);
-    };
-
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

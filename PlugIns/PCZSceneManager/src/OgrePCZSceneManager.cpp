@@ -44,6 +44,8 @@ email                : ericc@xenopi.com
 #include "OgreLogManager.h"
 #include "OgreRoot.h"
 
+#define ITER_VAL(it) (*it)
+
 namespace Ogre
 {
     PCZSceneManager::PCZSceneManager(const String& name) :
@@ -332,7 +334,8 @@ namespace Ogre
     SceneNode * PCZSceneManager::createSceneNode( void )
     {
         SceneNode * on = createSceneNodeImpl();
-        mSceneNodes[ on->getName() ] = on;
+        mSceneNodes.push_back(on);
+
         // create any zone-specific data necessary
         createZoneSpecificNodeData((PCZSceneNode*)on);
         // return pointer to the node
@@ -342,7 +345,7 @@ namespace Ogre
     SceneNode * PCZSceneManager::createSceneNode( const String &name )
     {
         // Check name not used
-        if (mSceneNodes.find(name) != mSceneNodes.end())
+        if (hasSceneNode(name))
         {
             OGRE_EXCEPT(
                 Exception::ERR_DUPLICATE_ITEM,
@@ -350,7 +353,8 @@ namespace Ogre
                 "PCZSceneManager::createSceneNode" );
         }
         SceneNode * on = createSceneNodeImpl( name );
-        mSceneNodes[ on->getName() ] = on;
+        mSceneNodes.push_back(on);
+
         // create any zone-specific data necessary
         createZoneSpecificNodeData((PCZSceneNode*)on);
         // return pointer to the node
@@ -408,7 +412,7 @@ namespace Ogre
             removeSceneNode( sn );
         
             // destroy the node
-            SceneManager::destroySceneNode( sn->getName() );
+            SceneManager::destroySceneNode( sn );
         }
     }
 
@@ -426,7 +430,7 @@ namespace Ogre
         for (SceneNodeList::iterator i = mSceneNodes.begin();
             i != mSceneNodes.end(); ++i)
         {
-            OGRE_DELETE i->second;
+            OGRE_DELETE ITER_VAL(i);
         }
         mSceneNodes.clear();
         mAutoTrackingSceneNodes.clear();
@@ -599,7 +603,7 @@ namespace Ogre
 
         while ( it != mSceneNodes.end() )
         {
-            pczsn = (PCZSceneNode*)(it->second);
+            pczsn = (PCZSceneNode*)ITER_VAL(it);
             if (pczsn->isMoved() && pczsn->isEnabled())
             {
                 // Update a single entry 
@@ -760,7 +764,7 @@ namespace Ogre
         for (SceneNodeList::iterator i = mSceneNodes.begin();
             i != mSceneNodes.end(); ++i)
         {
-            PCZSceneNode * pczsn = (PCZSceneNode*)(i->second);
+            PCZSceneNode * pczsn = (PCZSceneNode*)ITER_VAL(i);
             if (!destroySceneNodes)
             {
                 if (pczsn->getHomeZone() == zone)
@@ -906,7 +910,7 @@ namespace Ogre
         {
             while ( it != mSceneNodes.end() )
             {
-                pczsn = (PCZSceneNode*)(it->second);
+                pczsn = (PCZSceneNode*)ITER_VAL(it);
                 // create zone specific data for the node 
                 zone->createNodeZoneData(pczsn);
                 // proceed to next entry in the list
@@ -1097,7 +1101,7 @@ namespace Ogre
         for (size_t i = 0; i < count; ++i)
         {
             SceneNode* node = mShadowTextureCameras[i]->getParentSceneNode();
-            mSceneRoot->removeAndDestroyChild(node->getName());
+            mSceneRoot->removeAndDestroyChild(node);
         }
         SceneManager::destroyShadowTextures();
     }

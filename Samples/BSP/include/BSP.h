@@ -44,6 +44,9 @@ class _OgreSampleClassExport Sample_BSP : public SdkSample
 
     void locateResources()
     {
+    	// Pick a new resource group so Q3Shader parser is correctly registered
+    	ResourceGroupManager::getSingleton().setWorldResourceGroupName("BSPWorld");
+
         // load the Quake archive location and map name from a config file
         ConfigFile cf;
         cf.load(mFSLayer->getConfigFilePath("quakemap.cfg"));
@@ -105,6 +108,7 @@ class _OgreSampleClassExport Sample_BSP : public SdkSample
         ResourceGroupManager& rgm = ResourceGroupManager::getSingleton();
         rgm.unloadResourceGroup(rgm.getWorldResourceGroupName());
         rgm.removeResourceLocation(mArchive, ResourceGroupManager::getSingleton().getWorldResourceGroupName());
+        rgm.setWorldResourceGroupName(ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
     }
 
     void setupView()
@@ -119,11 +123,11 @@ class _OgreSampleClassExport Sample_BSP : public SdkSample
         ViewPoint vp = mSceneMgr->getSuggestedViewpoint(true);
 
         // Quake uses the Z axis as the up axis, so make necessary adjustments
-        mCamera->setFixedYawAxis(true, Vector3::UNIT_Z);
-        mCamera->pitch(Degree(90));
+        mCameraNode->setFixedYawAxis(true, Vector3::UNIT_Z);
+        mCameraNode->pitch(Degree(90));
 
-        mCamera->setPosition(vp.position);
-        mCamera->rotate(vp.orientation);
+        mCameraNode->setPosition(vp.position);
+        mCameraNode->rotate(vp.orientation);
 
         mCameraMan->setTopSpeed(350);   // make the camera move a bit faster
     }

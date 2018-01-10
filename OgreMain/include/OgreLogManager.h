@@ -33,6 +33,7 @@ THE SOFTWARE.
 
 #include "OgreLog.h"
 #include "OgreSingleton.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre
 {
@@ -119,6 +120,11 @@ namespace Ogre
         void logMessage( const String& message, LogMessageLevel lml = LML_NORMAL, 
             bool maskDebug = false);
 
+        /// @override
+        void logError(const String& message, bool maskDebug = false );
+        /// @override
+        void logWarning(const String& message, bool maskDebug = false );
+
         /** Log a message to the default log (signature for backward compatibility).
         */
         void logMessage( LogMessageLevel lml, const String& message,  
@@ -143,5 +149,6 @@ namespace Ogre
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

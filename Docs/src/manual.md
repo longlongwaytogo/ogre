@@ -4,9 +4,9 @@ Manual {#manual}
 - @subpage Introduction
 - @subpage The-Core-Objects
 - @subpage Scripts
+- @subpage High-level-Programs
 - @subpage Mesh-Tools
 - @subpage Hardware-Buffers
-- @subpage External-Texture-Sources
 - @subpage Shadows
 - @subpage Animation
 
@@ -77,7 +77,7 @@ This means every class, type etc should be prefixed with Ogre, e.g. Ogre::Camera
 
 # Overview from 10,000 feet
 
-Shown below is a diagram of some of the core objects and where they ’sit’ in the grand scheme of things. This is not all the classes by a long shot, just a few examples of the more more significant ones to give you an idea of how it slots together. ![](images/uml-overview.png)
+Shown below is a diagram of some of the core objects and where they ’sit’ in the grand scheme of things. This is not all the classes by a long shot, just a few examples of the more more significant ones to give you an idea of how it slots together. ![](images/uml-overview.svg)
 
 At the very top of the diagram is the Root object. This is your ’way in’ to the OGRE system, and it’s where you tend to create the top-level objects that you need to deal with, like scene managers, rendering systems and render windows, loading plugins, all the fundamental stuff. If you don’t know where to start, Root is it for almost everything, although often it will just give you another object which will actually do the detail work, since Root itself is more of an organiser and facilitator object.
 
@@ -105,11 +105,11 @@ You’ll notice that scattered around the edge are a number of plugins. OGRE is 
 
 The Ogre::Root object is the entry point to the OGRE system. This object MUST be the first one to be created, and the last one to be destroyed. In the example applications I chose to make an instance of Root a member of my application object which ensured that it was created as soon as my application object was, and deleted when the application object was deleted.
 
-The root object lets you configure the system, for example through the showConfigDialog() method which is an extremely handy method which performs all render system options detection and shows a dialog for the user to customise resolution, colour depth, full screen options etc. It also sets the options the user selects so that you can initialise the system directly afterwards.
+The root object lets you configure the system, for example through the Ogre::Root::showConfigDialog method which is an extremely handy method which performs all render system options detection and shows a dialog for the user to customise resolution, colour depth, full screen options etc. It also sets the options the user selects so that you can initialise the system directly afterwards.
 
 The root object is also your method for obtaining pointers to other objects in the system, such as the Ogre::SceneManager, Ogre::RenderSystem and various other resource managers. See below for details.
 
-Finally, if you run OGRE in continuous rendering mode, i.e. you want to always refresh all the rendering targets as fast as possible (the norm for games and demos, but not for windowed utilities), the root object has a method called startRendering, which when called will enter a continuous rendering loop which will only end when all rendering windows are closed, or any Ogre::FrameListener objects indicate that they want to stop the cycle (see below for details of Ogre::FrameListener objects).
+Finally, if you run OGRE in continuous rendering mode, i.e. you want to always refresh all the rendering targets as fast as possible (the norm for games and demos, but not for windowed utilities), the root object has a method called Ogre::Root::startRendering, which when called will enter a continuous rendering loop which will only end when all rendering windows are closed, or any Ogre::FrameListener objects indicate that they want to stop the cycle (see below for details of Ogre::FrameListener objects).
 
 # The RenderSystem object {#The-RenderSystem-object}
 
@@ -158,9 +158,9 @@ Ogre::Mesh objects are a type of resource, and are managed by the MeshManager re
 
 You can also create Mesh objects manually by calling the Ogre::MeshManager::createManual method. This way you can define the geometry yourself, but this is outside the scope of this manual.
 
-Mesh objects are the basis for the individual movable objects in the world, which are called [Entities](#Entities).
+Mesh objects are the basis for the individual movable objects in the world, which are called @ref Entities.
 
-Mesh objects can also be animated using See [Skeletal Animation](@ref Skeletal-Animation).
+Mesh objects can also be animated using See @ref Skeletal-Animation.
 
 # Entities {#Entities}
 
@@ -207,7 +207,7 @@ The SceneManager class manages the master list of materials available to the sce
 
 You can alter these settings by calling Ogre::MaterialManager::getDefaultSettings() and making the required changes to the Material which is returned.
 
-Entities automatically have Material’s associated with them if they use a Ogre::Mesh object, since the Ogre::Mesh object typically sets up it’s required materials on loading. You can also customise the material used by an entity as described in [Entities](#Entities). Just create a new Material, set it up how you like (you can copy an existing material into it if you like using a standard assignment statement) and point the SubEntity entries at it using Ogre::SubEntity::setMaterialName().
+Entities automatically have Material’s associated with them if they use a Ogre::Mesh object, since the Ogre::Mesh object typically sets up it’s required materials on loading. You can also customise the material used by an entity as described in @ref Entities. Just create a new Material, set it up how you like (you can copy an existing material into it if you like using a standard assignment statement) and point the SubEntity entries at it using Ogre::SubEntity::setMaterialName().
 
 
 
@@ -234,17 +234,17 @@ One Ogre::OverlaySystem per application is enough but you need to call addRender
 
 ## Creating 2D Elements
 
-The OverlayElement class abstracts the details of 2D elements which are added to overlays. All items which can be added to overlays are derived from this class. It is possible (and encouraged) for users of OGRE to define their own custom subclasses of OverlayElement in order to provide their own user controls. The key common features of all OverlayElements are things like size, position, basic material name etc. Subclasses extend this behaviour to include more complex properties and behaviour.
+The Ogre::OverlayElement class abstracts the details of 2D elements which are added to overlays. All items which can be added to overlays are derived from this class. It is possible (and encouraged) for users of OGRE to define their own custom subclasses of OverlayElement in order to provide their own user controls. The key common features of all OverlayElements are things like size, position, basic material name etc. Subclasses extend this behaviour to include more complex properties and behaviour.
 
-An important built-in subclass of OverlayElement is OverlayContainer. OverlayContainer is the same as a OverlayElement, except that it can contain other OverlayElements, grouping them together (allowing them to be moved together for example) and providing them with a local coordinate origin for easier lineup.
+An important built-in subclass of OverlayElement is Ogre::OverlayContainer. OverlayContainer is the same as a OverlayElement, except that it can contain other OverlayElements, grouping them together (allowing them to be moved together for example) and providing them with a local coordinate origin for easier lineup.
 
-The third important class is OverlayManager. Whenever an application wishes to create a 2D element to add to an overlay (or a container), it should call OverlayManager::createOverlayElement. The type of element you wish to create is identified by a string, the reason being that it allows plugins to register new types of OverlayElement for you to create without you having to link specifically to those libraries. For example, to create a panel (a plain rectangular area which can contain other OverlayElements) you would call OverlayManager::getSingleton().createOverlayElement("Panel", "myNewPanel");
+The third important class is Ogre::OverlayManager. Whenever an application wishes to create a 2D element to add to an overlay (or a container), it should call Ogre::OverlayManager::createOverlayElement. The type of element you wish to create is identified by a string, the reason being that it allows plugins to register new types of OverlayElement for you to create without you having to link specifically to those libraries. For example, to create a panel (a plain rectangular area which can contain other OverlayElements) you would call `OverlayManager::getSingleton().createOverlayElement("Panel", "myNewPanel");`.
 
 <a name="Adding-2D-Elements-to-the-Overlay"></a>
 
 ## Adding 2D Elements to the Overlay
 
-Only OverlayContainers can be added direct to an overlay. The reason is that each level of container establishes the Zorder of the elements contained within it, so if you nest several containers, inner containers have a higher Zorder than outer ones to ensure they are displayed correctly. To add a container (such as a Panel) to the overlay, simply call Ogre::Overlay::add2D.
+Only OverlayContainers can be added direct to an overlay. The reason is that each level of container establishes the Zorder of the elements contained within it, so if you nest several containers, inner containers have a higher Z-order than outer ones to ensure they are displayed correctly. To add a container (such as a Panel) to the overlay, simply call Ogre::Overlay::add2D.
 
 If you wish to add child elements to that container, call Ogre::OverlayContainer::addChild. Child elements can be Ogre::OverlayElements or Ogre::OverlayContainer instances themselves. Remember that the position of a child element is relative to the top-left corner of it’s parent.
 
@@ -268,7 +268,7 @@ This mode is useful when you want items in the overlay to be the same size on th
 <a name="Transforming-Overlays"></a>
 ## Transforming Overlays
 
-Another nice feature of overlays is being able to rotate, scroll and scale them as a whole. You can use this for zooming in / out menu systems, dropping them in from off screen and other nice effects. See the Ogre::Overlay::scroll, Ogre::Overlay::rotate and Ogre::Overlay::scale methods for more information.
+Another nice feature of overlays is being able to rotate, scroll and scale them as a whole. You can use this for zooming in / out menu systems, dropping them in from off screen and other nice effects. See the Ogre::Overlay::scroll, Ogre::Overlay::rotate and Ogre::Overlay::setScale methods for more information.
 
 <a name="Scripting-overlays"></a>
 
@@ -280,7 +280,7 @@ Overlays can also be defined in scripts. See [Overlay Scripts](@ref Overlay-Scri
 
 ## GUI systems
 
-Overlays are only really designed for non-interactive screen elements, although you can use them as a crude GUI. For a far more complete GUI solution, we recommend [CEGui](<http://www.cegui.org.uk>), [MyGUI](<http://mygui.info/>) or [libRocket](<http://librocket.com/>)
+Overlays are only really designed for non-interactive screen elements, although you can create a simple GUI using the [Trays System](@ref trays). For a far more complete GUI solution, we recommend [CEGui](<http://www.cegui.org.uk>), [MyGUI](<http://mygui.info/>) or [libRocket](<http://librocket.com/>)
 
 @page Scripts Scripts
 
@@ -1202,7 +1202,7 @@ Sets the width of a space in relation to the screen.
 
 @page Font-Definition-Scripts Font Definition Scripts
 
-Ogre uses texture-based fonts to render the TextAreaOverlayElement. You can also use the Font object for your own purpose if you wish. The final form of a font is a Material object generated by the font, and a set of ’glyph’ (character) texture coordinate information.
+Ogre uses texture-based fonts to render the Ogre::TextAreaOverlayElement. You can also use the Font object for your own purpose if you wish. The final form of a font is a Material object generated by the font, and a set of ’glyph’ (character) texture coordinate information.
 
 There are 2 ways you can get a font into OGRE:
 
@@ -1361,85 +1361,6 @@ OgreMeshUpgrader <oldmesh> <newmesh>
 ```
 
 The OGRE release notes will notify you when this is necessary with a new release.
-
-@page External-Texture-Sources External Texture Sources
-
-This tutorial will provide a brief introduction of ExternalTextureSource and ExternalTextureSourceManager classes, their relationship, and how the PlugIns work. For those interested in developing a Texture Source Plugin or maybe just wanting to know more about this system, take a look the ffmpegVideoSystem plugin, which you can find more about on the OGRE forums.
-
-<a name="What-Is-An-External-Texture-Source_003f"></a>
-
-# What Is An External Texture Source?
-
-What is a texture source? Well, a texture source could be anything - png, bmp, jpeg, etc. However, loading textures from traditional bitmap files is already handled by another part OGRE. There are, however, other types of sources to get texture data from - i.e. mpeg/avi/etc movie files, flash, run-time generated source, user defined, etc.
-
-How do external texture source plugins benefit OGRE? Well, the main answer is: adding support for any type of texture source does not require changing OGRE to support it... all that is involved is writing a new plugin. Additionally, because the manager uses the StringInterface class to issue commands/params, no change to the material script reader is needs to be made. As a result, if a plugin needs a special parameter set, it just creates a new command in it’s Parameter Dictionary. - see ffmpegVideoSystem plugin for an example. To make this work, two classes have been added to OGRE: ExternalTextureSource & ExternalTextureSourceManager.
-
-<a name="ExternalTextureSource-Class"></a>
-
-# ExternalTextureSource Class
-
-The ExternalTextureSource class is the base class that Texture Source PlugIns must be derived from. It provides a generic framework (via StringInterface class) with a very limited amount of functionality. The most common of parameters can be set through the TexturePlugInSource class interface or via the StringInterface commands contained within this class. While this may seem like duplication of code, it is not. By using the string command interface, it becomes extremely easy for derived plugins to add any new types of parameters that it may need.
-
-Default Command Parameters defined in ExternalTextureSource base class are:
-
--   Parameter Name: "filename" Argument Type: Ogre::String Sets a filename plugin will read from
--   Parameter Name: "play\_mode" Argument Type: Ogre::String Sets initial play mode to be used by the plugin - "play", "loop", "pause"
--   Parameter Name: "set\_T\_P\_S" Argument Type: Ogre::String Used to set the technique, pass, and texture unit level to apply this texture to. As an example: To set a technique level of 1, a pass level of 2, and a texture unit level of 3, send this string "1 2 3".
--   Parameter Name: "frames\_per\_second" Argument Type: Ogre::String Set a Frames per second update speed. (Integer Values only)
-
-<a name="ExternalTextureSourceManager-Class"></a>
-
-# ExternalTextureSourceManager Class
-
-ExternalTextureSourceManager is responsible for keeping track of loaded Texture Source PlugIns. It also aids in the creation of texture source textures from scripts. It also is the interface you should use when dealing with texture source plugins.
-
-Note: The function prototypes shown below are mockups - param names are simplified to better illustrate purpose here... Steps needed to create a new texture via ExternalTextureSourceManager:
-
--   Obviously, the first step is to have the desired plugin included in plugin.cfg for it to be loaded.
--   Set the desired PlugIn as Active via AdvancedTextureManager::getSingleton().SetCurrentPlugIn( String Type ); – type is whatever the plugin registers as handling (e.g. "video", "flash", "whatever", etc).
--   Note: Consult Desired PlugIn to see what params it needs/expects. Set params/value pairs via AdvancedTextureManager::getSingleton().getCurrentPlugIn()-&gt;setParameter( String Param, String Value );
--   After required params are set, a simple call to AdvancedTextureManager::getSingleton().getCurrentPlugIn()-&gt;createDefinedTexture( sMaterialName ); will create a texture to the material name given.
-
-
-
-The manager also provides a method for deleting a texture source material: AdvancedTextureManager::DestroyAdvancedTexture( String sTextureName ); The destroy method works by broadcasting the material name to all loaded TextureSourcePlugIns, and the PlugIn who actually created the material is responsible for the deletion, while other PlugIns will just ignore the request. What this means is that you do not need to worry about which PlugIn created the material, or activating the PlugIn yourself. Just call the manager method to remove the material. Also, all texture plugins should handle cleanup when they are shutdown.
-
-<a name="Texture-Source-Material-Script"></a>
-
-# Texture Source Material Script
-
-As mentioned earlier, the process of defining/creating texture sources can be done within material script file. Here is an example of a material script definition - Note: This example is based off the ffmpegVideoSystem plugin parameters.
-
-```cpp
-material Example/MyVideoExample
-{
-    technique
-    {
-        pass
-        {
-            texture_unit
-            {
-                texture_source video
-                {
-                    filename mymovie.mpeg
-                    play_mode play
-                    sound_mode on
-                }
-            }
-        }
-    }
-}
-```
-
-Notice that the first two param/value pairs are defined in the ExternalTextureSource base class and that the third parameter/value pair is not defined in the base class... That parameter is added to the param dictionary by the ffmpegVideoPlugin... This shows that extending the functionality with the plugins is extremely easy. Also, pay particular attention to the line: texture\_source video. This line identifies that this texture unit will come from a texture source plugin. It requires one parameter that determines which texture plugin will be used. In the example shown, the plugin requested is one that registered with "video" name.
-
-<a name="Simplified-Diagram-of-Process"></a>
-
-# Simplified Diagram of Process
-
-This diagram uses ffmpegVideoPlugin as example, but all plug ins will work the same in how they are registered/used here. Also note that TextureSource Plugins are loaded/registered before scripts are parsed. This does not mean that they are initialized... Plugins are not initialized until they are set active! This is to ensure that a rendersystem is set up before the plugins might make a call the rendersystem.
-
-![](images/TextureSource.jpg)
 
 @page Shadows Shadows
 

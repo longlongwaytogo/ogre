@@ -54,6 +54,7 @@ namespace Ogre
             case GL_DEPTH_COMPONENT24:
             case GL_DEPTH24_STENCIL8:  // Packed depth / stencil
                 mBitDepth = 24;
+                break;
             case GL_DEPTH_COMPONENT32:
             case GL_DEPTH_COMPONENT32F:
             case GL_DEPTH32F_STENCIL8:
@@ -98,12 +99,12 @@ namespace Ogre
 
         //Now check this is the appropriate format
         GL3PlusFrameBufferObject *fbo = 0;
-        renderTarget->getCustomAttribute(GL3PlusRenderTexture::CustomAttributeString_FBO, &fbo);
+        renderTarget->getCustomAttribute(GLRenderTexture::CustomAttributeString_FBO, &fbo);
 
         if( !fbo )
         {
             GL3PlusContext *windowContext = 0;
-            renderTarget->getCustomAttribute( GL3PlusRenderTexture::CustomAttributeString_GLCONTEXT, &windowContext );
+            renderTarget->getCustomAttribute( GLRenderTexture::CustomAttributeString_GLCONTEXT, &windowContext );
 
             //Non-FBO targets and FBO depth surfaces don't play along, only dummies which match the same
             //context

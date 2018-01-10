@@ -150,8 +150,8 @@ namespace Ogre {
     //---------------------------------------------------------------------
     void PanelOverlayElement::setTiling(Real x, Real y, ushort layer)
     {
-        assert (layer < OGRE_MAX_TEXTURE_COORD_SETS);
-        assert (x != 0 && y != 0);
+        OgreAssert (layer < OGRE_MAX_TEXTURE_COORD_SETS, "out of bounds");
+        OgreAssert (x != 0 && y != 0, "tile number must be > 0");
 
         mTileX[layer] = x;
         mTileY[layer] = y;
@@ -206,11 +206,6 @@ namespace Ogre {
         op = mRenderOp;
     }
     //---------------------------------------------------------------------
-    void PanelOverlayElement::setMaterialName(const String& matName)
-    {
-        OverlayContainer::setMaterialName(matName);
-    }
-    //---------------------------------------------------------------------
     void PanelOverlayElement::_updateRenderQueue(RenderQueue* queue)
     {
         if (mVisible)
@@ -257,7 +252,7 @@ namespace Ogre {
         HardwareVertexBufferSharedPtr vbuf =
             mRenderOp.vertexData->vertexBufferBinding->getBuffer(POSITION_BINDING);
         float* pPos = static_cast<float*>(
-            vbuf->lock(HardwareBuffer::HBL_DISCARD, Root::getSingleton().getFreqUpdatedBuffersUploadOption()) );
+            vbuf->lock(HardwareBuffer::HBL_DISCARD) );
 
         // Use the furthest away depth value, since materials should have depth-check off
         // This initialised the depth buffer for any 3D objects in front

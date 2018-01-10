@@ -60,9 +60,6 @@ namespace Ogre
         GLSLESProgramPipeline(GLSLESProgram* vertexProgram, GLSLESProgram* fragmentProgram);
         virtual ~GLSLESProgramPipeline();
 
-        /// GL Program Pipeline Handle
-        GLuint getGLProgramPipelineHandle() const { return mGLProgramPipelineHandle; }
-
         /** Updates program pipeline object uniforms using data from GpuProgramParameters.
          normally called by GLSLESGpuProgram::bindParameters() just before rendering occurs.
          */
@@ -80,8 +77,9 @@ namespace Ogre
          */
         void activate(void);
 
-        /// Get the index of a non-standard attribute bound in the linked code
-        virtual GLint getAttributeIndex(VertexElementSemantic semantic, uint index);
+#if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID || OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
+        virtual void notifyOnContextLost();
+#endif
 
     protected:
         enum {
@@ -89,13 +87,10 @@ namespace Ogre
             FRAGMENT_PROGRAM_LINKED = 2,
             ALL_PROGRAMS_LINKED = 3
         };
-        /// GL handle for pipeline object
-        GLuint mGLProgramPipelineHandle;
 
         /// Compiles and links the separate vertex and fragment programs
         virtual void compileAndLink(void);
-        /// Put a program pipeline in use
-        virtual void _useProgram(void);
+
         /// Build uniform references from active named uniforms
         virtual void buildGLUniformReferences(void);
     };

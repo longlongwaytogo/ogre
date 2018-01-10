@@ -79,7 +79,9 @@ enum FFPShaderStage
 
 // Fixed Function Library: Common functions
 #define FFP_LIB_COMMON                              "FFPLib_Common"
+/// @deprecated use ShaderFunction::addAssignmentAtom
 #define FFP_FUNC_ASSIGN                             "FFP_Assign"
+/// @deprecated use ShaderFunction::addAssignmentAtom with ParameterFactory::createConstParam
 #define FFP_FUNC_CONSTRUCT                          "FFP_Construct"
 #define FFP_FUNC_MODULATE                           "FFP_Modulate"
 #define FFP_FUNC_ADD                                "FFP_Add"
@@ -126,7 +128,9 @@ enum FFPShaderStage
 #define FFP_FUNC_PIXELFOG_LINEAR                    "FFP_PixelFog_Linear"
 #define FFP_FUNC_PIXELFOG_EXP                       "FFP_PixelFog_Exp"
 #define FFP_FUNC_PIXELFOG_EXP2                      "FFP_PixelFog_Exp2"
-#define FFP_LIB_ALPHA_TEST							"FFPLIB_AlphaTest"
+
+// Fixed Function Library: Alpha Test
+#define FFP_LIB_ALPHA_TEST							"FFPLib_AlphaTest"
 #define FFP_FUNC_ALPHA_TEST							"FFP_Alpha_Test"
 
 /** @} */

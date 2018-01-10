@@ -48,10 +48,8 @@
 
 #include "OgreGLRenderSystemCommon.h"
 
-extern "C"
-{
-    int
-    safeXErrorHandler (Display *display, XErrorEvent *event)
+namespace {
+    int safeXErrorHandler (Display *display, XErrorEvent *event)
     {
         // Ignore all XErrorEvents
         return 0;
@@ -74,6 +72,7 @@ namespace Ogre
         mClosed = false;
         mActive = false;
         mHidden = false;
+        mVisible = false;
         mVSync = false;
         mVSyncInterval = 1;
     }
@@ -115,7 +114,7 @@ namespace Ogre
         bool vsync = false;
         bool hidden = false;
         unsigned int vsyncInterval = 1;
-        int gamma = 0;
+        bool gamma = false;
         ::GLXContext glxContext = 0;
         ::GLXDrawable glxDrawable = 0;
         Window externalWindow = 0;
@@ -141,12 +140,13 @@ namespace Ogre
             if ((opt = miscParams->find("currentGLContext")) != end &&
                 StringConverter::parseBool(opt->second))
             {
-                if (! glXGetCurrentContext())
+                glxContext = glXGetCurrentContext();
+
+                if (!glxContext)
                 {
                     OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "currentGLContext was specified with no current GL context", "GLXWindow::create");
                 }
 
-                glxContext = glXGetCurrentContext();
                 glxDrawable = glXGetCurrentDrawable();
             }
 
@@ -204,6 +204,10 @@ namespace Ogre
                     // xid format
                     parentWindow = StringConverter::parseUnsignedLong(tokens[0]);
                 }
+
+                // reset drawable in case currentGLContext was used
+                // it should be queried from the parentWindow
+                glxDrawable = 0;
             }
             else if((opt = miscParams->find("externalWindowHandle")) != end)
             {
@@ -293,6 +297,7 @@ namespace Ogre
 #if OGRE_NO_QUAD_BUFFER_STEREO == 0
 				GLX_STEREO, mStereoEnabled ? True : False,
 #endif
+                GLX_FRAMEBUFFER_SRGB_CAPABLE_EXT, gamma,
                 None
             };
 
@@ -305,21 +310,27 @@ namespace Ogre
             };
 
             fbConfig = mGLSupport->selectFBConfig(minAttribs, maxAttribs);
-
-            // Now check the actual supported fsaa value
-            GLint maxSamples;
-            mGLSupport->getFBConfigAttrib(fbConfig, GLX_SAMPLES, &maxSamples);
-            mFSAA = maxSamples;
-
-            if (gamma != 0)
-            {
-                mGLSupport->getFBConfigAttrib(fbConfig, GL_FRAMEBUFFER_SRGB_CAPABLE_EXT, &gamma);
-            }
-
-            mHwGamma = (gamma != 0);
         }
 
-        if (! fbConfig)
+        if (fbConfig)
+        {
+            // Now check the actual fsaa and gamma value
+
+            GLint fsaa;
+            mGLSupport->getFBConfigAttrib(fbConfig, GLX_SAMPLES, &fsaa);            
+            mFSAA = fsaa;
+
+            if (gamma)
+            {
+                int val = 0;
+                gamma = mGLSupport->getFBConfigAttrib(fbConfig, GLX_FRAMEBUFFER_SRGB_CAPABLE_EXT, &val) == 0;
+                gamma = gamma && val; // can an supported extension return 0? lets rather be safe..
+            }
+            mHwGamma = gamma;
+
+            LogManager::getSingleton().logMessage("Actual frame buffer FSAA: " + StringConverter::toString(mFSAA) + ", gamma: " + StringConverter::toString(mHwGamma));
+        }
+        else
         {
             // This should never happen.
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Unexpected failure to determine a GLXFBConfig","GLXWindow::create");
@@ -460,7 +471,7 @@ namespace Ogre
         mTop = top;
         mActive = true;
         mClosed = false;
-
+        mVisible = true;
     }
 
     //-------------------------------------------------------------------------------------------------//
@@ -596,8 +607,10 @@ namespace Ogre
             }
             else if( _glXSwapIntervalMESA )
                 _glXSwapIntervalMESA( vsync ? mVSyncInterval : 0 );
-            else
+            else {
+		OgreAssert(_glXSwapIntervalSGI, "no glx swap interval function found");
                 _glXSwapIntervalSGI( vsync ? mVSyncInterval : 0 );
+	    }
         }
 
         mContext->endCurrent();

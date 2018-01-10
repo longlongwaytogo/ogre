@@ -45,17 +45,16 @@ namespace Ogre {
         uint32 free: 1;
     };
     #define SCRATCH_POOL_SIZE 1 * 1024 * 1024
-    #define SCRATCH_ALIGNMENT 32
     //---------------------------------------------------------------------
     GLHardwareBufferManagerBase::GLHardwareBufferManagerBase() 
         : mScratchBufferPool(NULL), mMapBufferThreshold(OGRE_GL_DEFAULT_MAP_BUFFER_THRESHOLD)
     {
-        mGLSupport = static_cast<GLRenderSystem*>(Root::getSingleton().getRenderSystem())->getGLSupportRef();
+        mRenderSystem = static_cast<GLRenderSystem*>(Root::getSingleton().getRenderSystem());
 
         // Init scratch pool
         // TODO make it a configurable size?
         // 32-bit aligned buffer
-        mScratchBufferPool = static_cast<char*>(OGRE_MALLOC_ALIGN(SCRATCH_POOL_SIZE, MEMCATEGORY_GEOMETRY, SCRATCH_ALIGNMENT));
+        mScratchBufferPool = static_cast<char*>(OGRE_MALLOC_SIMD(SCRATCH_POOL_SIZE, MEMCATEGORY_GEOMETRY));
         GLScratchBufferAlloc* ptrAlloc = (GLScratchBufferAlloc*)mScratchBufferPool;
         ptrAlloc->size = SCRATCH_POOL_SIZE - sizeof(GLScratchBufferAlloc);
         ptrAlloc->free = 1;
@@ -67,7 +66,12 @@ namespace Ogre {
         destroyAllDeclarations();
         destroyAllBindings();
 
-        OGRE_FREE_ALIGN(mScratchBufferPool, MEMCATEGORY_GEOMETRY, SCRATCH_ALIGNMENT);
+        OGRE_FREE_SIMD(mScratchBufferPool, MEMCATEGORY_GEOMETRY);
+    }
+    //-----------------------------------------------------------------------
+    GLStateCacheManager * GLHardwareBufferManagerBase::getStateCacheManager()
+    {
+        return mRenderSystem->_getStateCacheManager();
     }
     //-----------------------------------------------------------------------
     HardwareVertexBufferSharedPtr GLHardwareBufferManagerBase::createVertexBuffer(
@@ -122,19 +126,9 @@ namespace Ogre {
     //---------------------------------------------------------------------
     GLenum GLHardwareBufferManagerBase::getGLUsage(unsigned int usage)
     {
-        switch(usage)
-        {
-        case HardwareBuffer::HBU_STATIC:
-        case HardwareBuffer::HBU_STATIC_WRITE_ONLY:
-            return GL_STATIC_DRAW_ARB;
-        case HardwareBuffer::HBU_DYNAMIC:
-        case HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY:
-            return GL_DYNAMIC_DRAW_ARB;
-        case HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY_DISCARDABLE:
-            return GL_STREAM_DRAW_ARB;
-        default:
-            return GL_DYNAMIC_DRAW_ARB;
-        };
+        return  (usage & HardwareBuffer::HBU_DISCARDABLE) ? GL_STREAM_DRAW_ARB :
+                (usage & HardwareBuffer::HBU_STATIC) ? GL_STATIC_DRAW_ARB :
+                GL_DYNAMIC_DRAW_ARB;
     }
     //---------------------------------------------------------------------
     GLenum GLHardwareBufferManagerBase::getGLType(unsigned int type)
@@ -150,12 +144,21 @@ namespace Ogre {
             case VET_SHORT2:
             case VET_SHORT3:
             case VET_SHORT4:
+            case VET_SHORT2_NORM:
+            case VET_SHORT4_NORM:
                 return GL_SHORT;
             case VET_COLOUR:
             case VET_COLOUR_ABGR:
             case VET_COLOUR_ARGB:
             case VET_UBYTE4:
+            case VET_UBYTE4_NORM:
                 return GL_UNSIGNED_BYTE;
+            case VET_BYTE4:
+            case VET_BYTE4_NORM:
+                return GL_BYTE;
+            case VET_USHORT2_NORM:
+            case VET_USHORT4_NORM:
+                return GL_UNSIGNED_SHORT;
             default:
                 return 0;
         };

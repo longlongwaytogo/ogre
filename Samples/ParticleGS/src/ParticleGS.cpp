@@ -60,7 +60,8 @@ class _OgreSampleClassExport Sample_ParticleGS : public SdkSample
     {
         mParticleSystem = static_cast<ProceduralManualObject*>
             (mSceneMgr->createMovableObject("ParticleGSEntity", ProceduralManualObjectFactory::FACTORY_TYPE_NAME));
-        mParticleSystem->setMaterial("Ogre/ParticleGS/Display");
+        MaterialPtr mat = MaterialManager::getSingleton().getByName("Ogre/ParticleGS/Display", "General");
+        mParticleSystem->setMaterial(mat);
 
         // Generate the geometry that will seed the particle system.
         ManualObject* particleSystemSeed = mSceneMgr->createManualObject("ParticleSeed");
@@ -95,7 +96,7 @@ class _OgreSampleClassExport Sample_ParticleGS : public SdkSample
         // Apply the random texture.
         TexturePtr randomTexture = RandomTools::generateRandomVelocityTexture();
         r2vb->getRenderToBufferMaterial()->getBestTechnique()->getPass(0)->
-            getTextureUnitState("randomTexture")->setTextureName(
+            getTextureUnitState("RandomTexture")->setTextureName(
                 randomTexture->getName(), randomTexture->getTextureType());
 
         // Bind the two together.
@@ -137,8 +138,8 @@ class _OgreSampleClassExport Sample_ParticleGS : public SdkSample
     {
         demoTime = 0;
 
-        mCamera->setPosition(0,35,-100);
-        mCamera->lookAt(0,35,0);
+        mCameraNode->setPosition(0,35,-100);
+        mCameraNode->lookAt(Vector3(0,35,0), Node::TS_PARENT);
 
         mSceneMgr->setAmbientLight(ColourValue(0.7, 0.7, 0.7));
 
@@ -242,6 +243,9 @@ class _OgreSampleClassExport Sample_ParticleGS : public SdkSample
 
 static SamplePlugin* sp;
 static Sample* s;
+
+extern "C" void _OgreSampleExport dllStartPlugin(void);
+extern "C" void _OgreSampleExport dllStopPlugin(void);
 
 extern "C" _OgreSampleExport void dllStartPlugin()
 {

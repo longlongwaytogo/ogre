@@ -88,16 +88,7 @@ namespace Ogre {
     }
 
     //-----------------------------------------------------------------------
-    GLSLLinkProgramManager::~GLSLLinkProgramManager(void)
-    {
-        // iterate through map container and delete link programs
-        for (LinkProgramIterator currentProgram = mLinkPrograms.begin();
-            currentProgram != mLinkPrograms.end(); ++currentProgram)
-        {
-            delete currentProgram->second;
-        }
-
-    }
+    GLSLLinkProgramManager::~GLSLLinkProgramManager(void) {}
 
     //-----------------------------------------------------------------------
     GLSLLinkProgram* GLSLLinkProgramManager::getActiveLinkProgram(void)
@@ -108,36 +99,36 @@ namespace Ogre {
 
         // no active link program so find one or make a new one
         // is there an active key?
-        uint64 activeKey = 0;
+        uint32 activeKey = 0;
 
         if (mActiveVertexGpuProgram)
         {
-            activeKey = static_cast<uint64>(mActiveVertexGpuProgram->getShaderID()) << 32;
+            activeKey = HashCombine(activeKey, mActiveVertexGpuProgram->getShaderID());
         }
         if (mActiveGeometryGpuProgram)
         {
-            activeKey += static_cast<uint64>(mActiveGeometryGpuProgram->getShaderID()) << 16;
+            activeKey = HashCombine(activeKey, mActiveGeometryGpuProgram->getShaderID());
         }
         if (mActiveFragmentGpuProgram)
         {
-            activeKey += static_cast<uint64>(mActiveFragmentGpuProgram->getShaderID());
+            activeKey = HashCombine(activeKey, mActiveFragmentGpuProgram->getShaderID());
         }
 
         // only return a link program object if a vertex, geometry or fragment program exist
         if (activeKey > 0)
         {
             // find the key in the hash map
-            LinkProgramIterator programFound = mLinkPrograms.find(activeKey);
+            ProgramIterator programFound = mPrograms.find(activeKey);
             // program object not found for key so need to create it
-            if (programFound == mLinkPrograms.end())
+            if (programFound == mPrograms.end())
             {
                 mActiveLinkProgram = new GLSLLinkProgram(mActiveVertexGpuProgram, mActiveGeometryGpuProgram,mActiveFragmentGpuProgram);
-                mLinkPrograms[activeKey] = mActiveLinkProgram;
+                mPrograms[activeKey] = mActiveLinkProgram;
             }
             else
             {
                 // found a link program in map container so make it active
-                mActiveLinkProgram = programFound->second;
+                mActiveLinkProgram = static_cast<GLSLLinkProgram*>(programFound->second);
             }
 
         }
@@ -186,7 +177,7 @@ namespace Ogre {
         }
     }
     //---------------------------------------------------------------------
-    void GLSLLinkProgramManager::completeDefInfo(GLenum gltype, 
+    void GLSLLinkProgramManager::convertGLUniformtoOgreType(GLenum gltype,
         GpuConstantDefinition& defToUpdate)
     {
         // decode uniform size and type
@@ -396,149 +387,5 @@ namespace Ogre {
         } // end for
 
     }
-    //---------------------------------------------------------------------
-    void GLSLLinkProgramManager::extractConstantDefs(const String& src,
-        GpuNamedConstants& defs, const String& filename)
-    {
-        // Parse the output string and collect all uniforms
-        // NOTE this relies on the source already having been preprocessed
-        // which is done in GLSLProgram::loadFromSource
-        String line;
-        String::size_type currPos = src.find("uniform");
-        while (currPos != String::npos)
-        {
-            GpuConstantDefinition def;
-            String paramName;
-
-            // Now check for using the word 'uniform' in a larger string & ignore
-            bool inLargerString = false;
-            if (currPos != 0)
-            {
-                char prev = src.at(currPos - 1);
-                if (prev != ' ' && prev != '\t' && prev != '\r' && prev != '\n'
-                    && prev != ';')
-                    inLargerString = true;
-            }
-            if (!inLargerString && currPos + 7 < src.size())
-            {
-                char next = src.at(currPos + 7);
-                if (next != ' ' && next != '\t' && next != '\r' && next != '\n')
-                    inLargerString = true;
-            }
-
-            // skip 'uniform'
-            currPos += 7;
-
-            if (!inLargerString)
-            {
-                // find terminating semicolon
-                String::size_type endPos = src.find(";", currPos);
-                if (endPos == String::npos)
-                {
-                    // problem, missing semicolon, abort
-                    break;
-                }
-                line = src.substr(currPos, endPos - currPos);
-
-                // Remove spaces before opening square braces, otherwise
-                // the following split() can split the line at inappropriate
-                // places (e.g. "vec3 something [3]" won't work).
-                for (String::size_type sqp = line.find (" ["); sqp != String::npos;
-                     sqp = line.find (" ["))
-                    line.erase (sqp, 1);
-                // Split into tokens
-                StringVector parts = StringUtil::split(line, ", \t\r\n");
-
-                for (StringVector::iterator i = parts.begin(); i != parts.end(); ++i)
-                {
-                    // Is this a type?
-                    StringToEnumMap::iterator typei = mTypeEnumMap.find(*i);
-                    if (typei != mTypeEnumMap.end())
-                    {
-                        completeDefInfo(typei->second, def);
-                    }
-                    else
-                    {
-                        // if this is not a type, and not empty, it should be a name
-                        StringUtil::trim(*i);
-                        if (i->empty()) continue;
-
-                        String::size_type arrayStart = i->find("[", 0);
-                        if (arrayStart != String::npos)
-                        {
-                            // potential name (if butted up to array)
-                            String name = i->substr(0, arrayStart);
-                            StringUtil::trim(name);
-                            if (!name.empty())
-                                paramName = name;
-
-                            String::size_type arrayEnd = i->find("]", arrayStart);
-                            String arrayDimTerm = i->substr(arrayStart + 1, arrayEnd - arrayStart - 1);
-                            StringUtil::trim(arrayDimTerm);
-                            // the array term might be a simple number or it might be
-                            // an expression (e.g. 24*3) or refer to a constant expression
-                            // we'd have to evaluate the expression which could get nasty
-                            // TODO
-                            def.arraySize = StringConverter::parseInt(arrayDimTerm);
-
-                        }
-                        else
-                        {
-                            paramName = *i;
-                            def.arraySize = 1;
-                        }
-
-                        // Name should be after the type, so complete def and add
-                        // We do this now so that comma-separated params will do
-                        // this part once for each name mentioned 
-                        if (def.constType == GCT_UNKNOWN)
-                        {
-                            LogManager::getSingleton().logMessage(
-                                "Problem parsing the following GLSL Uniform: '"
-                                + line + "' in file " + filename, LML_CRITICAL);
-                            // next uniform
-                            break;
-                        }
-
-                        // Complete def and add
-                        // increment physical buffer location
-                        def.logicalIndex = 0; // not valid in GLSL
-                        if (def.isFloat())
-                        {
-                            def.physicalIndex = defs.floatBufferSize;
-                            defs.floatBufferSize += def.arraySize * def.elementSize;
-                        }
-                        else if(def.isDouble())
-                        {
-                            def.physicalIndex = defs.doubleBufferSize;
-                            defs.doubleBufferSize += def.arraySize * def.elementSize;
-                        }
-                        else if (def.isInt() || def.isSampler())
-                        {
-                            def.physicalIndex = defs.intBufferSize;
-                            defs.intBufferSize += def.arraySize * def.elementSize;
-                        }
-                        else if (def.isUnsignedInt())
-                        {
-                            def.physicalIndex = defs.uintBufferSize;
-                            defs.uintBufferSize += def.arraySize * def.elementSize;
-                        }
-                        defs.map.insert(GpuConstantDefinitionMap::value_type(paramName, def));
-
-                        // Generate array accessors
-                        defs.generateConstantDefinitionArrayEntries(paramName, def);
-                    }
-
-                }
-
-            } // not commented or a larger symbol
-
-            // Find next one
-            currPos = src.find("uniform", currPos);
-
-        }
-        
-    }
-
 }
 }

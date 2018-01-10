@@ -46,7 +46,7 @@ namespace Ogre
     */
 	/// Enable recognizing SM2.0 HLSL shaders.
 	/// (the same shader code could be used by many RenderSystems, directly or via Cg)
-	#define SUPPORT_SM2_0_HLSL_SHADERS  0
+	#define SUPPORT_SM2_0_HLSL_SHADERS  1
 
     class D3D11DriverList;
     class D3D11Driver;
@@ -243,10 +243,6 @@ namespace Ogre
 
         void fireDeviceEvent( D3D11Device* device, const String & name, D3D11RenderWindowBase* sendingWindow = NULL);
 
-        RenderTexture * createRenderTexture( const String & name, unsigned int width, unsigned int height,
-            TextureType texType = TEX_TYPE_2D, PixelFormat internalFormat = PF_X8R8G8B8, 
-            const NameValuePairList *miscParams = 0 ); 
-
         /// @copydoc RenderSystem::createMultiRenderTarget
         virtual MultiRenderTarget * createMultiRenderTarget(const String & name);
 
@@ -294,9 +290,6 @@ namespace Ogre
         D3D11HLSLProgram* _getBoundTessellationHullProgram() const;
         D3D11HLSLProgram* _getBoundTessellationDomainProgram() const;
         D3D11HLSLProgram* _getBoundComputeProgram() const;
-        void _setPointSpritesEnabled(bool enabled);
-        void _setPointParameters(Real size, bool attenuationEnabled, 
-            Real constant, Real linear, Real quadratic, Real minSize, Real maxSize);
         void _setTexture(size_t unit, bool enabled, const TexturePtr &texPtr);
         void _setBindingType(TextureUnitState::BindingType bindingType);
         void _setVertexTexture(size_t unit, const TexturePtr& tex);

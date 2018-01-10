@@ -58,7 +58,8 @@ namespace Ogre {
 
         addImpl(ret);
         // Tell resource group manager
-        ResourceGroupManager::getSingleton()._notifyResourceCreated(ret);
+        if(ret)
+            ResourceGroupManager::getSingleton()._notifyResourceCreated(ret);
         return ret;
 
     }
@@ -130,8 +131,15 @@ namespace Ogre {
 
         // Attempt to resolve the collision
         ResourceLoadingListener* listener = ResourceGroupManager::getSingleton().getLoadingListener();
-        if (!result.second && listener && listener->resourceCollision(res.get(), this))
+        if (!result.second && listener)
         {
+            if(listener->resourceCollision(res.get(), this) == false)
+            {
+                // explicitly use previous instance and destroy current
+                res.reset();
+                return;
+            }
+
             // Try to do the addition again, no seconds attempts to resolve collisions are allowed
             if(ResourceGroupManager::getSingleton().isResourceGroupInGlobalPool(res->getGroup()))
             {

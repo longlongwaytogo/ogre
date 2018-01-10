@@ -33,18 +33,17 @@ namespace Ogre
 {
 	static const String& HLMS_KEY = "hlmsMatBinding";
 	//-----------------------------------------------------------------------------------
-	HlmsManager::HlmsManager(SceneManager* sceneManager, const String& pieseFilesResorceGroup) : mSceneManager(sceneManager)		
-	{
-		mShaderManager = new ShaderManager(mSceneManager, pieseFilesResorceGroup);
-		mSceneManager->addListener(this);
-		mSceneManager->addRenderObjectListener(this);
+    HlmsManager::HlmsManager(SceneManager* sceneManager, const String& pieseFilesResorceGroup)
+            : mSceneManager(sceneManager), mShaderManager(pieseFilesResorceGroup)
+    {
+        mSceneManager->addListener(this);
+        mSceneManager->addRenderObjectListener(this);
 	}
 	//-----------------------------------------------------------------------------------
 	HlmsManager::~HlmsManager()
 	{
 		mSceneManager->removeListener(this);
 		mSceneManager->removeRenderObjectListener(this);
-		delete mShaderManager;
 	}
 	//-----------------------------------------------------------------------------------
 	void HlmsManager::preFindVisibleObjects(SceneManager* source, SceneManager::IlluminationRenderStage irs, Viewport* v)
@@ -63,7 +62,7 @@ namespace Ogre
 			Any hlmsMatBindingAny = rend->getUserObjectBindings().getUserAny(HLMS_KEY);
 
 			// this check should not fail
-			if (hlmsMatBindingAny.isEmpty())
+			if (!hlmsMatBindingAny.has_value())
 				continue;
 
 			HlmsMatBindingMap* hlmsMatBindingMap = any_cast<HlmsMatBindingMap*>(hlmsMatBindingAny);
@@ -86,7 +85,7 @@ namespace Ogre
 			Any hlmsMatBindingAny = rend->getUserObjectBindings().getUserAny(HLMS_KEY);
 
 			// this check should not fail
-			if (hlmsMatBindingAny.isEmpty())
+			if (!hlmsMatBindingAny.has_value())
 				continue;
 
 			HlmsMatBindingMap* hlmsMatBindingMap = any_cast<HlmsMatBindingMap*>(hlmsMatBindingAny);
@@ -128,7 +127,7 @@ namespace Ogre
 							HlmsDatablock* vertexDatablock = hlmsMaterial->getVertexDatablock();
 							if (vertexDatablock)
 							{
-								GpuProgramPtr gpuProgram = mShaderManager->getGpuProgram(vertexDatablock);
+								GpuProgramPtr gpuProgram = mShaderManager.getGpuProgram(vertexDatablock);
 
 								if (!pass->hasVertexProgram() || pass->getVertexProgram() != gpuProgram)
 								{
@@ -143,7 +142,7 @@ namespace Ogre
 							HlmsDatablock* fragmentDatablock = hlmsMaterial->getFragmentDatablock();
 							if (fragmentDatablock)
 							{
-								GpuProgramPtr gpuProgram = mShaderManager->getGpuProgram(fragmentDatablock);
+								GpuProgramPtr gpuProgram = mShaderManager.getGpuProgram(fragmentDatablock);
 
 								if (!pass->hasFragmentProgram() || pass->getFragmentProgram() != gpuProgram)
 								{
@@ -158,7 +157,7 @@ namespace Ogre
 							// Recreate all texture unit states
 							if (HasShaderChanged)
 							{
-								hlmsMaterial->createTexturUnits(pass);
+								hlmsMaterial->createTextureUnits(pass);
 							}
 						}
 					}
@@ -172,7 +171,7 @@ namespace Ogre
 	{
 		// check if the renderable has bounded hlmsMaterials
 		Any hlmsMatBindingAny = rend->getUserObjectBindings().getUserAny(HLMS_KEY);
-		if (hlmsMatBindingAny.isEmpty())
+		if (!hlmsMatBindingAny.has_value())
 			return;
 
 		// get the bounded material for the current pass
@@ -187,10 +186,10 @@ namespace Ogre
 		}
 	}
 	//-----------------------------------------------------------------------------------
-	void HlmsManager::bind(Renderable* rend, HlmsMaterialBase* material, String passName)
+	void HlmsManager::bind(Renderable* rend, HlmsMaterialBase* material, const String& passName)
 	{
 		HlmsMatBindingMap* hlmsMatMap;
-		if (rend->getUserObjectBindings().getUserAny(HLMS_KEY).isEmpty())
+		if (!rend->getUserObjectBindings().getUserAny(HLMS_KEY).has_value())
 		{
 			hlmsMatMap = new HlmsMatBindingMap();
 			rend->getUserObjectBindings().setUserAny(HLMS_KEY, Any(hlmsMatMap));
@@ -208,9 +207,9 @@ namespace Ogre
 		(*hlmsMatMap)[passName] = material;
 	}
 	//-----------------------------------------------------------------------------------
-	void HlmsManager::unbind(Renderable* rend, String passName)
+	void HlmsManager::unbind(Renderable* rend, const String& passName)
 	{
-		if (!rend->getUserObjectBindings().getUserAny(HLMS_KEY).isEmpty())
+		if (rend->getUserObjectBindings().getUserAny(HLMS_KEY).has_value())
 		{
 			HlmsMatBindingMap* hlmsMatMap = any_cast<HlmsMatBindingMap*>(rend->getUserObjectBindings().getUserAny(HLMS_KEY));
 			hlmsMatMap->erase(passName);
@@ -229,7 +228,7 @@ namespace Ogre
 		}
 	}
 	//-----------------------------------------------------------------------------------
-	void HlmsManager::unbindAll(String passName)
+	void HlmsManager::unbindAll(const String& passName)
 	{
 		RenderableVector::iterator bindingIt = mBindedRenderables.begin();
 		RenderableVector::iterator bindingItEnd = mBindedRenderables.end();
@@ -249,9 +248,9 @@ namespace Ogre
 		mBindedRenderables.clear();
 	}
 	//-----------------------------------------------------------------------------------
-	bool HlmsManager::hasBinding(Renderable* rend, String passName)
+	bool HlmsManager::hasBinding(Renderable* rend, const String& passName)
 	{
-		if (!rend->getUserObjectBindings().getUserAny(HLMS_KEY).isEmpty())
+		if (rend->getUserObjectBindings().getUserAny(HLMS_KEY).has_value())
 		{
 		    HlmsMatBindingMap* hlmsMatMap = any_cast<HlmsMatBindingMap*>(rend->getUserObjectBindings().getUserAny(HLMS_KEY));
 			return hlmsMatMap->find(passName) != hlmsMatMap->end();

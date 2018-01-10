@@ -89,7 +89,7 @@ TestContext::TestContext(int argc, char** argv) : OgreBites::SampleContext(), mS
     mSummaryOutputDir = binOpt["-o"];
     mHelp = unOpt["-h"] || unOpt["--help"];
 
-    if(mReferenceSetPath == BLANKSTRING)
+    if(mReferenceSetPath.empty())
         mReferenceSetPath = mOutputDir;
 }
 //-----------------------------------------------------------------------
@@ -131,14 +131,16 @@ void TestContext::setup()
     mode >> token; // 'x' as seperator between width and height
     mode >> h; // height
 
-    mWindow = mRoot->createRenderWindow("OGRE Sample Browser", w, h, false);
+    miscParams["FSAA"] = ropts["FSAA"].currentValue;
+    miscParams["vsync"] = ropts["VSync"].currentValue;
+
+    mWindow = mRoot->createRenderWindow("OGRE Sample Browser", w, h, false, &miscParams);
 #endif
 
     mWindow->setDeactivateOnFocusChange(false);
     
     locateResources();
-
-    createDummyScene();
+    initialiseRTShaderSystem();
 
     loadResources();
     Ogre::TextureManager::getSingleton().setDefaultNumMipmaps(5);
@@ -198,7 +200,7 @@ void TestContext::setup()
     strftime(temp, 20, "%Y-%m-%d %H:%M:%S", gmtime(&raw));
     Ogre::String timestamp = Ogre::String(temp);
 
-    if(mOutputDir == BLANKSTRING)
+    if(mOutputDir.empty())
     {
         Ogre::String filestamp = Ogre::String(temp);
         // name for this batch (used for naming the directory, and uniquely identifying this batch)
@@ -368,12 +370,6 @@ bool TestContext::frameEnded(const Ogre::FrameEvent& evt)
 
         if (mCurrentTest->isDone())
         {
-#ifdef INCLUDE_RTSHADER_SYSTEM
-            mShaderGenerator->removeAllShaderBasedTechniques(); // clear techniques from the RTSS
-#endif
-
-            createDummyScene();
-
             // continue onto the next test
             runSample(0);
 
@@ -402,7 +398,6 @@ void TestContext::runSample(OgreBites::Sample* s)
     Ogre::ControllerManager::getSingleton().setFrameDelay(0);
     Ogre::ControllerManager::getSingleton().setTimeFactor(1.f);
     mCurrentFrame = 0;
-    destroyDummyScene();
 
     OgreBites::Sample* sampleToRun = s;
 
@@ -521,11 +516,14 @@ bool TestContext::oneTimeConfig()
             rs->setConfigOption("Full Screen", "No");
             rs->setConfigOption("Video Mode", "640x 480");
 
+            // test alpha to coverage and MSAA resolve
+            rs->setConfigOption("FSAA", "2");
+
             try {
                 rs->setConfigOption("Fixed Pipeline Enabled", "No");
             } catch(...) {}
             try {
-                rs->setConfigOption("VSync", "Yes");
+                rs->setConfigOption("VSync", "No");
             } catch(...) {}
         }
     }
@@ -539,7 +537,7 @@ bool TestContext::oneTimeConfig()
 void TestContext::setupDirectories(Ogre::String batchName)
 {
     // ensure there's a root directory for visual tests
-    if(mOutputDir == BLANKSTRING)
+    if(mOutputDir.empty())
     {
         mOutputDir = mFSLayer->getWritablePath("VisualTests/");
         static_cast<Ogre::FileSystemLayer*>(mFSLayer)->createDirectory(mOutputDir);

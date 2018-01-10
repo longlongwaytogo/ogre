@@ -29,27 +29,28 @@
 #define __GLSLProgramManager_H__
 
 #include "OgreGL3PlusPrerequisites.h"
-#include "OgreSingleton.h"
+#include "OgreGLSLProgramManagerCommon.h"
 #include "OgreGLSLShader.h"
 #include "OgreGLSLProgram.h"
 #include "OgreGLSLExtSupport.h"
 
 namespace Ogre {
 
-    /** Ogre assumes that there are separate programs to deal with but
-        GLSL has one program object that represents the active shader
-        objects during a rendering state.  GLSL shader objects are
-        compiled separately and then attached to a program object and
-        then the program object is linked.  Since Ogre can only handle
-        one program being active in a pass, the GLSL Link Program
-        Manager does the same.  The GLSL Link program manager acts as
-        a state machine and activates a program object based on the
-        active programs.  Previously created program objects are
+    /** Ogre assumes that there are separate vertex and fragment
+        programs to deal with but GLSL has one program object that
+        represents the active vertex and fragment shader objects
+        during a rendering state.  GLSL Vertex and fragment shader
+        objects are compiled separately and then attached to a program
+        object and then the program object is linked.  Since Ogre can
+        only handle one vertex program and one fragment program being
+        active in a pass, the GLSL Link Program Manager does the same.
+        The GLSL Link program manager acts as a state machine and
+        activates a program object based on the active vertex and
+        fragment program.  Previously created program objects are
         stored along with a unique key in a hash_map for quick
         retrieval the next time the program object is required.
     */
-
-    class _OgreGL3PlusExport GLSLProgramManager
+    class _OgreGL3PlusExport GLSLProgramManager : public GLSLProgramManagerCommon, public Singleton<GLSLProgramManager>
     {
     protected:
         /// Active shader objects defining the active program object.
@@ -60,86 +61,74 @@ namespace Ogre {
         GLSLShader* mActiveFragmentShader;
         GLSLShader* mActiveComputeShader;
 
-        const GL3PlusSupport& mGLSupport;
+        /// active objects defining the active rendering gpu state
+        GLSLProgram* mActiveProgram;
 
-        typedef map<String, GLenum>::type StringToEnumMap;
-        /// 
-        StringToEnumMap mTypeEnumMap;
+        GL3PlusRenderSystem* mRenderSystem;
 
         /**  Convert GL uniform size and type to OGRE constant types
              and associate uniform definitions together. */
-        void convertGLUniformtoOgreType(GLenum gltype, 
+        void convertGLUniformtoOgreType(GLenum gltype,
                                         GpuConstantDefinition& defToUpdate);
         /** Find the data source definition for a given uniform name
             and reference. Return true if found and pair the reference
             with its data source. */
-        bool findUniformDataSource(
+        static bool findUniformDataSource(
             const String& paramName,
-            const GpuConstantDefinitionMap* vertexConstantDefs,
-            const GpuConstantDefinitionMap* hullConstantDefs,
-            const GpuConstantDefinitionMap* domainConstantDefs,
-            const GpuConstantDefinitionMap* geometryConstantDefs,
-            const GpuConstantDefinitionMap* fragmentConstantDefs,
-            const GpuConstantDefinitionMap* computeConstantDefs,
+            const GpuConstantDefinitionMap* (&constantDefs)[6],
             GLUniformReference& refToUpdate);
         /** Find the data source definition for a given atomic counter
             uniform name and reference. Return true if found and pair
             the reference with its data source. */
-        bool findAtomicCounterDataSource(
+        static bool findAtomicCounterDataSource(
             const String& paramName,
-            const GpuConstantDefinitionMap* vertexConstantDefs,
-            const GpuConstantDefinitionMap* hullConstantDefs,
-            const GpuConstantDefinitionMap* domainConstantDefs,
-            const GpuConstantDefinitionMap* geometryConstantDefs,
-            const GpuConstantDefinitionMap* fragmentConstantDefs,
-            const GpuConstantDefinitionMap* computeConstantDefs,
+            const GpuConstantDefinitionMap* (&constantDefs)[6],
             GLAtomicCounterReference& refToUpdate);
-        /** Parse an individual uniform from a GLSL source file and
-            store it in a GpuNamedConstant. */
-        void parseGLSLUniform(
-            const String& src, GpuNamedConstants& defs,
-            String::size_type currPos,
-            const String& filename, GpuSharedParametersPtr sharedParams);
-
     public:
 
-        GLSLProgramManager(const GL3PlusSupport& support);
+        GLSLProgramManager(GL3PlusRenderSystem* renderSystem);
+        ~GLSLProgramManager();
+
+        /** Get the program object that links the two active shader
+            objects together if a program object was not already
+            created and linked a new one is created and linked
+            @note this method does NOT link seperable programs.
+        */
+        GLSLProgram* getActiveProgram(void);
+
+        /** Set the shader for the next rendering state.
+            The active program object will be cleared.  Normally
+            called from the GLSLShader::bindProgram and
+            unbindProgram methods
+        */
+        void setActiveVertexShader(GLSLShader* vertexGpuProgram);
+        /// @copydoc setActiveVertexShader
+        void setActiveHullShader(GLSLShader* hullGpuProgram);
+        /// @copydoc setActiveVertexShader
+        void setActiveDomainShader(GLSLShader* domainGpuProgram);
+        /// @copydoc setActiveVertexShader
+        void setActiveGeometryShader(GLSLShader* geometryGpuProgram);
+        /// @copydoc setActiveVertexShader
+        void setActiveFragmentShader(GLSLShader* fragmentGpuProgram);
+        /// @copydoc setActiveVertexShader
+        void setActiveComputeShader(GLSLShader* computeGpuProgram);
 
         /** Populate a list of uniforms based on an OpenGL program object.
-            @param programObject Handle to the program object to query.
-            @param vertexConstantDefs Definition of the uniforms extracted from the
-            vertex program, used to match up physical buffer indexes with program
-            uniforms. May be null if there is no vertex program.
-            @param fragmentConstantDefs Definition of the uniforms extracted from the
-            fragment program, used to match up physical buffer indexes with program
-            uniforms. May be null if there is no fragment program.
-            @param uniformList The list to populate (will not be cleared before adding, clear
-            it yourself before calling this if that's what you want).
         */
         void extractUniformsFromProgram(
             GLuint programObject,
-            const GpuConstantDefinitionMap* vertexConstantDefs,
-            const GpuConstantDefinitionMap* hullConstantDefs,
-            const GpuConstantDefinitionMap* domainConstantDefs,
-            const GpuConstantDefinitionMap* geometryConstantDefs,
-            const GpuConstantDefinitionMap* fragmentConstantDefs,
-            const GpuConstantDefinitionMap* computeConstantDefs,
+            const GpuConstantDefinitionMap* (&constantDefs)[6],
             GLUniformReferenceList& uniformList,
             GLAtomicCounterReferenceList& counterList,
             GLUniformBufferList& uniformBufferList,
             SharedParamsBufferMap& sharedParamsBufferMap,
             //GLShaderStorageBufferList& shaderStorageBufferList,
             GLCounterBufferList& counterBufferList);
-        /** Populate a list of uniforms based on GLSL source and store
-            them in GpuNamedConstants.  
-            @param src Reference to the source code.
-            @param constantDefs The defs to populate (will
-            not be cleared before adding, clear it yourself before
-            calling this if that's what you want).  
-            @param filename The file name this came from, for logging errors.
-        */
-        void extractUniformsFromGLSL(
-            const String& src, GpuNamedConstants& constantDefs, const String& filename);
+
+        GL3PlusStateCacheManager* getStateCacheManager();
+
+        static GLSLProgramManager& getSingleton(void);
+        static GLSLProgramManager* getSingletonPtr(void);
     };
 
 }

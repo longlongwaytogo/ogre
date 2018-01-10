@@ -11,12 +11,12 @@ class SGResolver(Ogre.MaterialManager_Listener):
             return None
 
         def_name = Ogre.cvar.MaterialManager_DEFAULT_SCHEME_NAME
-        succ = self.shadergen.createShaderBasedTechnique(mat.getName(), def_name, name)
+        succ = self.shadergen.createShaderBasedTechnique(mat, def_name, name)
 
         if not succ:
             return None
 
-        self.shadergen.validateMaterial(name, mat.getName())
+        self.shadergen.validateMaterial(name, mat.getName(), mat.getGroup())
 
         return mat.getTechnique(1)
 
@@ -33,7 +33,11 @@ def main():
             rgm.addResourceLocation(loc, kind, sec)
 
     arch = cfg.getSettings("General").values()[0]
-    rgm.addResourceLocation(arch + "/materials/programs/GLSL", "FileSystem", "General");
+    rgm.addResourceLocation(arch + "/materials/programs/GLSL", "FileSystem", "General")
+    arch += "/RTShaderLib"
+    rgm.addResourceLocation(arch + "/materials", "FileSystem", "General")
+    rgm.addResourceLocation(arch + "/GLSL", "FileSystem", "General")
+
     if not root.restoreConfig():
         root.showConfigDialog(Ogre.ConfigDialog())
 
@@ -56,7 +60,9 @@ def main():
     scn_mgr.setAmbientLight(Ogre.ColourValue(.1, .1, .1))
 
     light = scn_mgr.createLight("MainLight")
-    light.setPosition(0, 10, 15)
+    lightnode = scn_mgr.getRootSceneNode().createChildSceneNode()
+    lightnode.setPosition(0, 10, 15)
+    lightnode.attachObject(light)
 
     cam = scn_mgr.createCamera("myCam")
     cam.setPosition(0, 0, 15)

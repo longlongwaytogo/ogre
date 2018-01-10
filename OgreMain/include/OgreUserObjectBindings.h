@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 #include "OgrePrerequisites.h"
 #include "OgreAny.h"
+#include "OgreHeaderPrefix.h"
 
 namespace Ogre {
 
@@ -96,7 +97,7 @@ namespace Ogre {
 
         /** Returns empty user any object.
         */
-        static const Any& getEmptyUserAny() { return msEmptyAny; }
+        OGRE_DEPRECATED static const Any& getEmptyUserAny() { return msEmptyAny; }
 
     // copying
     public:
@@ -168,5 +169,6 @@ namespace Ogre {
     /** @} */
 }
 
+#include "OgreHeaderSuffix.h"
 
 #endif

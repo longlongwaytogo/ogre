@@ -72,7 +72,7 @@ elseif (UNIX)
     set(NATIVE_INCLUDES
         ${CMAKE_CURRENT_SOURCE_DIR}/include/GLX)
     
-    set(PLATFORM_LIBS ${X11_LIBRARIES} ${X11_Xrandr_LIB})
+    set(PLATFORM_LIBS ${X11_LIBRARIES} ${X11_Xrandr_LIB} ${OPENGL_gl_LIBRARY})
   endif()
   
   if(NOT OGRE_STATIC)
@@ -86,12 +86,20 @@ set(GLSUPPORT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/  ${CMAKE_CURRENT_
 
 include_directories(${NATIVE_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/include/ ${CMAKE_CURRENT_SOURCE_DIR}/include/GLSL/)
 file(GLOB GLSL_SOURCES src/GLSL/*.cpp)
+
+if(OGRE_CONFIG_ENABLE_GL_STATE_CACHE_SUPPORT)
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/OgreGLUniformCache.cpp 
+    PROPERTIES COMPILE_DEFINITIONS OGRE_ENABLE_STATE_CACHE)
+endif()
+
 ogre_add_library_to_folder(RenderSystems OgreGLSupport STATIC 
     ${GLSUPPORT_HEADERS} ${PLATFORM_HEADERS} ${PLATFORM_SOURCES} ${GLSL_SOURCES} 
     src/OgreGLRenderSystemCommon.cpp 
     src/OgreGLTextureCommon.cpp
     src/OgreGLRenderTexture.cpp
     src/OgreGLHardwarePixelBufferCommon.cpp
+    src/OgreGLUniformCache.cpp
+    src/OgreGLVertexArrayObject.cpp
 )
 target_link_libraries(OgreGLSupport OgreMain ${PLATFORM_LIBS})
 generate_export_header(OgreGLSupport 

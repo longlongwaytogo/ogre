@@ -77,8 +77,6 @@ namespace Ogre
 			language = "glsles";
 		}
 
-        mIsGLES = language == "glsles";
-
 		mVertexDatablock.setLanguage(language);
 		mFragmentDatablock.setLanguage(language);
 
@@ -108,7 +106,7 @@ namespace Ogre
 		setTexture((SamplerType)(ST_MAIN_ALBEDO + mapSlot * 3), tex, textureAddressing, blendFactor, 0, blendFunc);
 	}
 	//-----------------------------------------------------------------------------------
-	void PbsMaterial::setNormalrTexture(MapSlot mapSlot, TexturePtr tex, TextureAddressing textureAddressing, float normalBlendFactor, float rBlendFactor)
+	void PbsMaterial::setNormalRTexture(MapSlot mapSlot, TexturePtr tex, TextureAddressing textureAddressing, float normalBlendFactor, float rBlendFactor)
 	{
 		setTexture((SamplerType)(ST_MAIN_NORMALR + mapSlot * 3), tex, textureAddressing, normalBlendFactor, rBlendFactor);
 	}
@@ -197,9 +195,6 @@ namespace Ogre
 
 		mPropertyMap.setProperty("lights_count", mDirectionalLightCount + mPointLightCount + mSpotLightCount);
 
-		// tell the shader some details about the render system
-		mPropertyMap.setProperty("is_gles", mIsGLES);
-
 		// tell the shader if the hardware supports hardware gamma correction or not 
 		mPropertyMap.setProperty("hw_gamma_read", mCanHardwareGamma);
 
@@ -261,7 +256,7 @@ namespace Ogre
 		}
 	}
 	//-----------------------------------------------------------------------------------
-	void PbsMaterial::createTexturUnits(Pass* pass)
+	void PbsMaterial::createTextureUnits(Pass* pass)
 	{
 		GpuProgramParametersSharedPtr fragmentParams = pass->getFragmentProgramParameters();
 		fragmentParams->setIgnoreMissingParams(true);
@@ -387,7 +382,7 @@ namespace Ogre
 				SamplerContainer& s = _samplers[i];
 				if (s.status == SS_UPDATED)
 				{
-					updateTexturUnits(s.textureUnitState, fragmentParams, s, i);
+					updateTextureUnits(s.textureUnitState, fragmentParams, s, i);
 					s.status = SS_ACTIVE;
 				}
 			}
@@ -396,7 +391,7 @@ namespace Ogre
 		}
 	}
 	//-----------------------------------------------------------------------------------
-	void PbsMaterial::updateTexturUnits(TextureUnitState* textureUnitState, GpuProgramParametersSharedPtr fragmentParams, SamplerContainer& s, int index)
+	void PbsMaterial::updateTextureUnits(TextureUnitState* textureUnitState, GpuProgramParametersSharedPtr fragmentParams, SamplerContainer& s, int index)
 	{
 		if (s.textureType == TEX_TYPE_2D)
 		{
@@ -434,7 +429,7 @@ namespace Ogre
 		}
 	}
 	//-----------------------------------------------------------------------------------
-	void PbsMaterial::setTexture(SamplerType samplerType, TexturePtr tex, TextureAddressing textureAddr,
+	void PbsMaterial::setTexture(SamplerType samplerType, const TexturePtr& tex, const TextureAddressing& textureAddr,
 		float blendFactor1, float blendFactor2, BlendFunction blendFunc, float intensityFactor)
 	{
 		SamplerContainer& s = _samplers[samplerType];
@@ -470,6 +465,7 @@ namespace Ogre
 		s.blendFunc = blendFunc;
 		s.blendFactor1 = blendFactor1;
 		s.blendFactor2 = blendFactor2;
+		s.hasBlendFactor1 = s.hasBlendFactor2 = true;
 
 		s.intensity = intensityFactor;
 		s.mipmapCount = !tex ? 0.0f : tex->getNumMipmaps();

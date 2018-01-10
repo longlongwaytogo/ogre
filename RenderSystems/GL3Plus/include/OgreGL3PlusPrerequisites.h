@@ -38,8 +38,9 @@ namespace Ogre {
     class GLRTTManager;
     typedef GLContext GL3PlusContext;
     typedef GLRTTManager GL3PlusRTTManager;
-    class GL3PlusSupport;
     class GL3PlusRenderSystem;
+    class GL3PlusStateCacheManager;
+    class GL3PlusSupport;
     class GL3PlusTexture;
     class GL3PlusTextureManager;
     class GL3PlusFBOManager;
@@ -49,8 +50,8 @@ namespace Ogre {
     
     class GLSLShader;
 
-    typedef SharedPtr<GLSLShader> GLSLShaderPtr;
-    typedef SharedPtr<GL3PlusTexture> GL3PlusTexturePtr;
+    typedef shared_ptr<GLSLShader> GLSLShaderPtr;
+    typedef shared_ptr<GL3PlusTexture> GL3PlusTexturePtr;
 }
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_WIN32

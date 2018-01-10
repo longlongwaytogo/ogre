@@ -64,10 +64,10 @@ void GLHardwarePixelBufferCommon::freeBuffer()
     }
 }
 
-PixelBox GLHardwarePixelBufferCommon::lockImpl(const Image::Box& lockBox, LockOptions options)
+PixelBox GLHardwarePixelBufferCommon::lockImpl(const Box& lockBox, LockOptions options)
 {
     allocateBuffer();
-    if (options != HardwareBuffer::HBL_DISCARD)
+    if (!((mUsage & HBU_WRITE_ONLY) || (options == HBL_DISCARD) || (options == HBL_WRITE_ONLY)))
     {
         // Download the old contents of the texture
         download(mBuffer);
@@ -79,7 +79,7 @@ PixelBox GLHardwarePixelBufferCommon::lockImpl(const Image::Box& lockBox, LockOp
 
 void GLHardwarePixelBufferCommon::unlockImpl(void)
 {
-    if (mCurrentLockOptions != HardwareBuffer::HBL_READ_ONLY)
+    if (mCurrentLockOptions != HBL_READ_ONLY)
     {
         // From buffer to card, only upload if was locked for writing.
         upload(mCurrentLock, mLockedBox);
@@ -87,7 +87,7 @@ void GLHardwarePixelBufferCommon::unlockImpl(void)
     freeBuffer();
 }
 
-void GLHardwarePixelBufferCommon::upload(const PixelBox &data, const Image::Box &dest)
+void GLHardwarePixelBufferCommon::upload(const PixelBox &data, const Box &dest)
 {
     OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR,
                 "Upload not possible for this pixelbuffer type",

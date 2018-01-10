@@ -12,9 +12,6 @@
 file(GLOB HEADER_FILES "include/*.h")
 file(GLOB SOURCE_FILES "src/*.cpp")
 list(APPEND SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/glesw.c")
-if (APPLE_IOS)
-  set_source_files_properties(src/glesw.c PROPERTIES COMPILE_FLAGS "-x objective-c")
-endif()
 
 file(GLOB GLSLES_FILES "src/GLSLES/include/*.h" "src/GLSLES/src/*.cpp")
 
@@ -25,17 +22,9 @@ set(GLESW_HEADER_INSTALL "GLES3")
 file(GLOB GLESW_HEADERS "include/GLES3/*.h")
 file(GLOB KHR_HEADERS "include/KHR/*.h")
 
-include_directories(src/StateCacheManager)
 if(OGRE_CONFIG_ENABLE_GL_STATE_CACHE_SUPPORT)
-  list(APPEND SOURCE_FILES
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/StateCacheManager/OgreGLES2StateCacheManagerImp.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/StateCacheManager/OgreGLES2UniformCacheImp.cpp
-  )
-else()
-  list(APPEND SOURCE_FILES
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/StateCacheManager/OgreGLES2NullStateCacheManagerImp.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/StateCacheManager/OgreGLES2NullUniformCacheImp.cpp
-  )
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/OgreGLES2StateCacheManager.cpp 
+    PROPERTIES COMPILE_DEFINITIONS OGRE_ENABLE_STATE_CACHE)
 endif()
 
 if (OGRE_CONFIG_ENABLE_GLES2_CG_SUPPORT)
@@ -74,7 +63,7 @@ include_directories(
 )
 
 ogre_add_library_to_folder(RenderSystems RenderSystem_GLES2 ${OGRE_LIB_TYPE} ${HEADER_FILES} ${GLESW_HEADERS} ${KHR_HEADERS} ${PLATFORM_HEADERS} ${SOURCE_FILES} ${PLATFORM_SOURCES} SEPARATE ${GLSLES_FILES})
-target_link_libraries(RenderSystem_GLES2 OgreMain ${OPENGLES3_LIBRARIES} ${OPENGLES2_LIBRARIES} ${GLSUPPORT_LIBS})
+target_link_libraries(RenderSystem_GLES2 OgreMain ${GLSUPPORT_LIBS} ${OPENGLES3_LIBRARIES} ${OPENGLES2_LIBRARIES})
 
 if (NOT OGRE_STATIC)
   set_target_properties(RenderSystem_GLES2 PROPERTIES
@@ -92,4 +81,5 @@ install(FILES ${HEADER_FILES} ${GLSUPPORT_HEADERS} DESTINATION include/OGRE/Rend
 install(FILES "include/GLES2/gl2ext.h" DESTINATION include/OGRE/RenderSystems/GLES2/GLES2)
 install(FILES ${GLESW_HEADERS} DESTINATION include/OGRE/RenderSystems/GLES2/${GLESW_HEADER_INSTALL})
 install(FILES ${KHR_HEADERS} DESTINATION include/OGRE/RenderSystems/GLES2/KHR)
+install(FILES ${PLATFORM_HEADERS} DESTINATION include/OGRE/RenderSystems/GLES2/${PLATFORM_HEADER_INSTALL})
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/GLSLES/include/ DESTINATION include/OGRE/RenderSystems/GLES2/GLSLES)

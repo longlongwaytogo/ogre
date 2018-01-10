@@ -98,8 +98,8 @@ Sample_Compositor::Sample_Compositor()
 void Sample_Compositor::setupView()
 {
     SdkSample::setupView();
-    mCamera->setPosition(Ogre::Vector3(0,0,0));
-    mCamera->lookAt(Ogre::Vector3(0,0,-300));
+    mCameraNode->setPosition(Ogre::Vector3(0,0,0));
+    mCameraNode->lookAt(Ogre::Vector3(0,0,-300), Ogre::Node::TS_PARENT);
     mCamera->setNearClipDistance(1);
 }
 
@@ -321,10 +321,12 @@ void Sample_Compositor::checkBoxToggled(OgreBites::CheckBox * box)
             CompositorInstance* instance = CompositorManager::getSingleton().getCompositorChain(mViewport)->getCompositor(compositorName);
             if (instance)
             {
-                CompositionTechnique::TextureDefinitionIterator it = instance->getTechnique()->getTextureDefinitionIterator();
-                while (it.hasMoreElements())
+                const CompositionTechnique::TextureDefinitions& defs =
+                    instance->getTechnique()->getTextureDefinitions();
+                CompositionTechnique::TextureDefinitions::const_iterator defIter;
+                for (defIter = defs.begin(); defIter != defs.end(); ++defIter)
                 {
-                    CompositionTechnique::TextureDefinition* texDef = it.getNext();
+                    CompositionTechnique::TextureDefinition* texDef = *defIter;
                     size_t numTextures = texDef->formatList.size();
                     if (numTextures > 1)
                     {
@@ -430,8 +432,8 @@ void Sample_Compositor::setupScene(void)
     pPlaneEnt->setCastShadows(false);
     mSceneMgr->getRootSceneNode()->createChildSceneNode()->attachObject(pPlaneEnt);
 
-    mCamera->setPosition(-400, 50, 900);
-    mCamera->lookAt(0,80,0);
+    mCameraNode->setPosition(-400, 50, 900);
+    mCameraNode->lookAt(Ogre::Vector3(0,80,0), Ogre::Node::TS_PARENT);
 }
 
 
@@ -445,57 +447,6 @@ bool Sample_Compositor::frameRenderingQueued(const FrameEvent& evt)
 /// Create the hard coded postfilter effects
 void Sample_Compositor::createEffects(void)
 {
-    // Bloom compositor is loaded from script but here is the hard coded equivalent
-    //          CompositorPtr comp = CompositorManager::getSingleton().create(
-    //                          "Bloom", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME
-    //                  );
-    //          {
-    //                  CompositionTechnique *t = comp->createTechnique();
-    //                  {
-    //                          CompositionTechnique::TextureDefinition *def = t->createTextureDefinition("rt0");
-    //                          def->width = 128;
-    //                          def->height = 128;
-    //                          def->format = PF_A8R8G8B8;
-    //                  }
-    //                  {
-    //                          CompositionTechnique::TextureDefinition *def = t->createTextureDefinition("rt1");
-    //                          def->width = 128;
-    //                          def->height = 128;
-    //                          def->format = PF_A8R8G8B8;
-    //                  }
-    //                  {
-    //                          CompositionTargetPass *tp = t->createTargetPass();
-    //                          tp->setInputMode(CompositionTargetPass::IM_PREVIOUS);
-    //                          tp->setOutputName("rt1");
-    //                  }
-    //                  {
-    //                          CompositionTargetPass *tp = t->createTargetPass();
-    //                          tp->setInputMode(CompositionTargetPass::IM_NONE);
-    //                          tp->setOutputName("rt0");
-    //                          CompositionPass *pass = tp->createPass();
-    //                          pass->setType(CompositionPass::PT_RENDERQUAD);
-    //                          pass->setMaterialName("Ogre/Compositor/Blur0");
-    //                          pass->setInput(0, "rt1");
-    //                  }
-    //                  {
-    //                          CompositionTargetPass *tp = t->createTargetPass();
-    //                          tp->setInputMode(CompositionTargetPass::IM_NONE);
-    //                          tp->setOutputName("rt1");
-    //                          CompositionPass *pass = tp->createPass();
-    //                          pass->setType(CompositionPass::PT_RENDERQUAD);
-    //                          pass->setMaterialName("Ogre/Compositor/Blur1");
-    //                          pass->setInput(0, "rt0");
-    //                  }
-    //                  {
-    //                          CompositionTargetPass *tp = t->getOutputTargetPass();
-    //                          tp->setInputMode(CompositionTargetPass::IM_PREVIOUS);
-    //                          { CompositionPass *pass = tp->createPass();
-    //                          pass->setType(CompositionPass::PT_RENDERQUAD);
-    //                          pass->setMaterialName("Ogre/Compositor/BloomBlend");
-    //                          pass->setInput(0, "rt1");
-    //                          }
-    //                  }
-    //          }
     // Glass compositor is loaded from script but here is the hard coded equivalent
     /// Glass effect
     //          CompositorPtr comp2 = CompositorManager::getSingleton().create(

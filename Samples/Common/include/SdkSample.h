@@ -54,6 +54,7 @@ namespace OgreBites
             mTrayMgr = 0;
             mCameraMan = 0;
             mCamera = 0;
+            mCameraNode = 0;
             mViewport = 0;
             mControls = 0;
             mCursorWasVisible = false;
@@ -75,8 +76,8 @@ namespace OgreBites
         {
             if (mCameraMan->getStyle() == CS_FREELOOK)
             {
-                state["CameraPosition"] = Ogre::StringConverter::toString(mCamera->getPosition());
-                state["CameraOrientation"] = Ogre::StringConverter::toString(mCamera->getOrientation());
+                state["CameraPosition"] = Ogre::StringConverter::toString(mCameraNode->getPosition());
+                state["CameraOrientation"] = Ogre::StringConverter::toString(mCameraNode->getOrientation());
             }
         }
 
@@ -88,8 +89,8 @@ namespace OgreBites
             if (state.find("CameraPosition") != state.end() && state.find("CameraOrientation") != state.end())
             {
                 mCameraMan->setStyle(CS_FREELOOK);
-                mCamera->setPosition(Ogre::StringConverter::parseVector3(state["CameraPosition"]));
-                mCamera->setOrientation(Ogre::StringConverter::parseQuaternion(state["CameraOrientation"]));
+                mCameraNode->setPosition(Ogre::StringConverter::parseVector3(state["CameraPosition"]));
+                mCameraNode->setOrientation(Ogre::StringConverter::parseQuaternion(state["CameraOrientation"]));
             }
         }
 
@@ -106,11 +107,6 @@ namespace OgreBites
             return true;
         }
 
-        virtual void windowResized(Ogre::RenderWindow* rw)
-        {
-            mCamera->setAspectRatio((Ogre::Real)mViewport->getActualWidth() / (Ogre::Real)mViewport->getActualHeight());
-        }
-
         virtual bool keyPressed(const KeyboardEvent& evt)
         {
         	int key = evt.keysym.sym;
@@ -123,23 +119,7 @@ namespace OgreBites
 
             if (mTrayMgr->isDialogVisible()) return true;   // don't process any more keys if dialog is up
 
-            if (key == SDLK_F6)   // take a screenshot
-            {
-                mWindow->writeContentsToTimestampedFile("screenshot", ".png");
-            }
-#if OGRE_PROFILING
-            // Toggle visibility of profiler window
-            else if (key == 'p')
-            {
-                Ogre::Profiler* prof = Ogre::Profiler::getSingletonPtr();
-                if (prof)
-                    prof->setEnabled(!prof->getEnabled());
-            }
-#endif // OGRE_PROFILING
-            else {
-                mControls->keyPressed(evt);
-            }
-
+            mControls->keyPressed(evt);
             mCameraMan->keyPressed(evt);
             return true;
         }
@@ -253,9 +233,9 @@ namespace OgreBites
         {
             Sample::_shutdown();
 
+            delete mControls;
             delete mTrayMgr;
             delete mCameraMan;
-            delete mControls;
 
             // restore settings we may have changed, so as not to affect other samples
             Ogre::MaterialManager::getSingleton().setDefaultTextureFiltering(Ogre::TFO_BILINEAR);
@@ -268,12 +248,15 @@ namespace OgreBites
         {
             // setup default viewport layout and camera
             mCamera = mSceneMgr->createCamera("MainCamera");
+            mCameraNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
+            mCameraNode->attachObject(mCamera);
+            mCameraNode->setFixedYawAxis(true);
             mViewport = mWindow->addViewport(mCamera);
             mCamera->setAspectRatio((Ogre::Real)mViewport->getActualWidth() / (Ogre::Real)mViewport->getActualHeight());
             mCamera->setAutoAspectRatio(true);
             mCamera->setNearClipDistance(5);
 
-            mCameraMan = new CameraMan(mCamera);   // create a default camera controller
+            mCameraMan = new CameraMan(mCameraNode);   // create a default camera controller
         }
 
         virtual void setDragLook(bool enabled)
@@ -292,8 +275,46 @@ namespace OgreBites
             }
         }
 
+        void addTextureDebugOverlay(TrayLocation loc, const Ogre::TexturePtr& tex, size_t i)
+        {
+            using namespace Ogre;
+            // Create material
+            String matName = "Ogre/DebugTexture" + StringConverter::toString(i);
+            MaterialPtr debugMat = MaterialManager::getSingleton().getByName(
+                matName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+            if (!debugMat)
+            {
+                debugMat = MaterialManager::getSingleton().create(matName,
+                                                                  ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+            }
+            Pass* p = debugMat->getTechnique(0)->getPass(0);
+            p->removeAllTextureUnitStates();
+            p->setLightingEnabled(false);
+            TextureUnitState *t = p->createTextureUnitState(tex->getName());
+            t->setTextureAddressingMode(TextureUnitState::TAM_CLAMP);
+
+            // create template
+            if (!OverlayManager::getSingleton().hasOverlayElement("Ogre/DebugTexOverlay", true))
+            {
+                OverlayElement* e = OverlayManager::getSingleton().createOverlayElement("Panel", "Ogre/DebugTexOverlay", true);
+                e->setMetricsMode(GMM_PIXELS);
+                e->setWidth(128);
+                e->setHeight(128);
+            }
+
+            // add widget
+            String widgetName = "DebugTex"+ StringConverter::toString(i);
+            Widget* w = mTrayMgr->getWidget(widgetName);
+            if (!w)
+            {
+                w = mTrayMgr->createDecorWidget(loc, widgetName, "Ogre/DebugTexOverlay");
+            }
+            w->getOverlayElement()->setMaterial(debugMat);
+        }
+
         Ogre::Viewport* mViewport;          // main viewport
         Ogre::Camera* mCamera;              // main camera
+        Ogre::SceneNode* mCameraNode;       // camera node
         TrayManager* mTrayMgr;           // tray interface manager
         CameraMan* mCameraMan;           // basic camera controller
         AdvancedRenderControls* mControls; // sample details panel
